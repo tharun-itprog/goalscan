@@ -64,6 +64,42 @@ console.log('\nNOVA drives the processing component');
   check('unprocessed (NOVA 1) scores full marks', computeHealthScore(coke(1)).breakdown.processing, 10);
 }
 
+console.log('\nWater is the best possible drink and scores like it');
+{
+  // Regression guard: this returned 78/100 with nutrition 38/60, because the
+  // beverage scale used the solid-food floor of -15 -- a score a drink can
+  // never reach, since it needs fiber and protein to go negative.
+  const water = product({
+    name: 'Spring water', isBeverage: true, novaGroup: 1,
+    ingredientsText: 'Water',
+    nutriments: {
+      ...EMPTY, energyKcal: 0, sugars: 0, proteins: 0,
+      fat: 0, saturatedFat: 0, salt: 0, fiber: 0,
+    },
+  });
+  const h = computeHealthScore(water);
+  check('nutrition is full marks', h.breakdown.nutrition, 60);
+  check('overall score', h.value, 100);
+  check('grade', h.grade, 'excellent');
+}
+
+console.log('\nBreakdown explains itself');
+{
+  const cola = product({
+    isBeverage: true, novaGroup: 4, additiveTags: ['en:e150d'],
+    nutriments: { ...EMPTY, energyKcal: 42, sugars: 10.6, proteins: 0, fat: 0, saturatedFat: 0, salt: 0, fiber: 0 },
+  });
+  const h = computeHealthScore(cola);
+  const sugarRow = h.nutritionDetail.find((d) => d.key === 'sugars');
+  check('sugar row reports the measured value', sugarRow?.value, 10.6);
+  check('sugar row reports points cost', sugarRow?.points, 8);
+  check('processing is explained in words', h.processingReason, 'Ultra-processed (NOVA 4)');
+  console.log(`  cola now ${h.value}/100 (${h.grade})`);
+  for (const d of h.nutritionDetail.filter((x) => x.points > 0)) {
+    console.log(`    ${d.label}: ${d.value}${d.unit} -> ${d.points}/${d.maxPoints} ${d.direction}`);
+  }
+}
+
 console.log('\nBeverage table is stricter than the food table');
 {
   const panel = { ...EMPTY, energyKcal: 42, sugars: 10.6, proteins: 0, fat: 0, saturatedFat: 0, salt: 0, fiber: 0 };

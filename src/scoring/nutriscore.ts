@@ -11,7 +11,7 @@
  * would hook in if we add it.
  */
 
-import type { Nutriments } from '../types';
+import type { Nutriments, NutrientPoints } from '../types';
 
 /**
  * Returns how many threshold boundaries `value` has crossed.
@@ -77,6 +77,8 @@ export interface NutriScoreResult {
   positivePoints: number;
   /** True if any input we needed was missing and defaulted to zero. */
   incomplete: boolean;
+  /** Per-nutrient working, so the UI can show why the score is what it is. */
+  detail: NutrientPoints[];
 }
 
 /**
@@ -108,11 +110,12 @@ export function computeNutriScore(n: Nutriments, isBeverage = false): NutriScore
   const energyKj = kcal === null ? 0 : kcal * 4.184;
   const sodiumMg = salt === null ? 0 : saltToSodiumMg(salt);
 
-  const negativePoints =
-    pointsFromThresholds(energyKj, isBeverage ? BEVERAGE_ENERGY_KJ : ENERGY_KJ) +
-    pointsFromThresholds(sugars ?? 0, isBeverage ? BEVERAGE_SUGARS_G : SUGARS_G) +
-    pointsFromThresholds(satFat ?? 0, SAT_FAT_G) +
-    pointsFromThresholds(sodiumMg, SODIUM_MG);
+  const energyPoints = pointsFromThresholds(energyKj, isBeverage ? BEVERAGE_ENERGY_KJ : ENERGY_KJ);
+  const sugarPoints = pointsFromThresholds(sugars ?? 0, isBeverage ? BEVERAGE_SUGARS_G : SUGARS_G);
+  const satFatPoints = pointsFromThresholds(satFat ?? 0, SAT_FAT_G);
+  const sodiumPoints = pointsFromThresholds(sodiumMg, SODIUM_MG);
+
+  const negativePoints = energyPoints + sugarPoints + satFatPoints + sodiumPoints;
 
   // fruitsVegetablesNuts is frequently absent; treating it as 0 is the
   // conservative choice here (it only ever *helps* a score).
@@ -129,12 +132,30 @@ export function computeNutriScore(n: Nutriments, isBeverage = false): NutriScore
 
   const score = negativePoints - positivePoints;
 
+  const detail: NutrientPoints[] = [
+    { key: 'energy', label: 'Energy', value: kcal, unit: 'kcal', points: energyPoints, maxPoints: 10, direction: 'penalty' },
+    { key: 'sugars', label: 'Sugars', value: sugars, unit: 'g', points: sugarPoints, maxPoints: 10, direction: 'penalty' },
+    { key: 'saturatedFat', label: 'Saturated fat', value: satFat, unit: 'g', points: satFatPoints, maxPoints: 10, direction: 'penalty' },
+    { key: 'sodium', label: 'Sodium', value: salt === null ? null : Math.round(sodiumMg), unit: 'mg', points: sodiumPoints, maxPoints: 10, direction: 'penalty' },
+    { key: 'fiber', label: 'Fiber', value: fiber, unit: 'g', points: fiberPoints, maxPoints: 5, direction: 'bonus' },
+    {
+      key: 'protein', label: 'Protein', value: protein, unit: 'g',
+      points: countProtein ? proteinPoints : 0,
+      maxPoints: 5, direction: 'bonus',
+      // Surfaced so a user who sees a high-protein product earn nothing here
+      // gets an explanation rather than assuming the app is broken.
+      disregarded: !countProtein && proteinPoints > 0,
+    },
+    { key: 'fruitVeg', label: 'Fruit, veg & nuts', value: n.fruitsVegetablesNuts, unit: '%', points: fvPoints, maxPoints: isBeverage ? 10 : 5, direction: 'bonus' },
+  ];
+
   return {
     score,
     grade: gradeFromScore(score, isBeverage),
     negativePoints,
     positivePoints,
     incomplete,
+    detail,
   };
 }
 
@@ -156,13 +177,21 @@ function gradeFromScore(score: number, isBeverage: boolean): NutriScoreResult['g
 /**
  * Map raw Nutri-Score points onto a 0-100 scale where higher is better.
  *
- * Solid foods span roughly -15..40. Beverages compress into a much narrower
- * band, so they get their own range — otherwise every drink bunches up in the
- * top third of the scale and a soda reads as "good".
+ * Solid foods span roughly -15..40: negative scores are reachable because
+ * fiber and protein earn bonus points that offset the penalties.
+ *
+ * Beverages need their own range, and specifically their own FLOOR. A drink
+ * has effectively no fiber or protein, so it cannot earn its way below zero —
+ * zero points is the best a beverage can do, and that best is plain water.
+ * Reusing the food floor of -15 made that unreachable ideal the anchor, so
+ * water scored 62% of the nutrition component instead of 100% and came out at
+ * 78/100 overall. The ceiling is 20 rather than 40 for the same reason: with
+ * no saturated fat or sodium to speak of, a drink's realistic worst case is
+ * energy and sugar maxing out at ~20 combined.
  */
 export function nutriScoreTo100(score: number, isBeverage = false): number {
-  const BEST = -15;
-  const WORST = isBeverage ? 25 : 40;
+  const BEST = isBeverage ? 0 : -15;
+  const WORST = isBeverage ? 20 : 40;
   const normalized = (WORST - score) / (WORST - BEST);
   return Math.round(Math.min(1, Math.max(0, normalized)) * 100);
 }

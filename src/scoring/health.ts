@@ -45,19 +45,28 @@ function countIngredients(text: string | null): number | null {
 function processingPoints(
   novaGroup: 1 | 2 | 3 | 4 | null,
   ingredientsText: string | null,
-): number {
+): { points: number; reason: string } {
   if (novaGroup !== null) {
     // 1 unprocessed | 2 culinary ingredient | 3 processed | 4 ultra-processed
-    return { 1: 10, 2: 8, 3: 5, 4: 0 }[novaGroup];
+    const table = {
+      1: { points: 10, reason: 'Unprocessed or minimally processed (NOVA 1)' },
+      2: { points: 8, reason: 'Processed culinary ingredient (NOVA 2)' },
+      3: { points: 5, reason: 'Processed food (NOVA 3)' },
+      4: { points: 0, reason: 'Ultra-processed (NOVA 4)' },
+    } as const;
+    return table[novaGroup];
   }
 
   // Fallback only — see the caveat above.
   const count = countIngredients(ingredientsText);
-  if (count === null) return 5; // neutral — don't reward or punish missing data
-  if (count <= 3) return 10;
-  if (count <= 7) return 7;
-  if (count <= 12) return 4;
-  return 1;
+  if (count === null) {
+    return { points: 5, reason: 'No processing data available — scored neutral' };
+  }
+  const points = count <= 3 ? 10 : count <= 7 ? 7 : count <= 12 ? 4 : 1;
+  return {
+    points,
+    reason: `Estimated from ${count} ingredient${count === 1 ? '' : 's'} (no processing classification available)`,
+  };
 }
 
 function gradeFor(value: number): HealthScore['grade'] {
@@ -77,12 +86,21 @@ export function computeHealthScore(product: Product): HealthScore {
   );
   const processing = processingPoints(product.novaGroup, product.ingredientsText);
 
-  const value = Math.min(100, Math.max(0, nutrition + additives.points + processing));
+  const value = Math.min(
+    100,
+    Math.max(0, nutrition + additives.points + processing.points),
+  );
 
   return {
     value,
     grade: gradeFor(value),
-    breakdown: { nutrition, additives: additives.points, processing },
+    breakdown: {
+      nutrition,
+      additives: additives.points,
+      processing: processing.points,
+    },
+    nutritionDetail: nutri.detail,
+    processingReason: processing.reason,
     flaggedAdditives: additives.flagged,
     incomplete: nutri.incomplete,
   };

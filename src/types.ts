@@ -77,6 +77,27 @@ export interface DailyTargets {
   fiberG: number;
 }
 
+/**
+ * One line of the nutrition breakdown — what a nutrient measured, and how many
+ * points that cost or earned. This is what turns "38/60" from a verdict the
+ * user has to accept into arithmetic they can check.
+ */
+export interface NutrientPoints {
+  key:
+    | 'energy' | 'sugars' | 'saturatedFat' | 'sodium'
+    | 'fiber' | 'protein' | 'fruitVeg';
+  label: string;
+  /** Measured amount per 100g/ml. Null when the panel didn't have it. */
+  value: number | null;
+  unit: string;
+  points: number;
+  maxPoints: number;
+  /** Penalties count against the score; bonuses count for it. */
+  direction: 'penalty' | 'bonus';
+  /** True when this bonus was withheld by the protein clause. */
+  disregarded?: boolean;
+}
+
 export interface HealthScore {
   /** 0-100, higher is better. */
   value: number;
@@ -86,6 +107,10 @@ export interface HealthScore {
     additives: number; // 0-30
     processing: number; // 0-10
   };
+  /** Per-nutrient working behind the nutrition figure, for the "why" panel. */
+  nutritionDetail: NutrientPoints[];
+  /** Plain-language explanation of the processing points. */
+  processingReason: string;
   /** Which additives cost points, for the "why" panel. */
   flaggedAdditives: FlaggedAdditive[];
   /** True when we had to score with an incomplete panel. */
