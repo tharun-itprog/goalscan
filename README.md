@@ -57,6 +57,22 @@ US/UK/EU coverage is good enough to ship on. India is not a completeness problem
 
 Expo / React Native (TypeScript). Open Food Facts for product data. No backend — profile and scoring both run on-device.
 
+## The scan cascade
+
+| Tier | Method | Speed | Cost | Coverage |
+|---|---|---|---|---|
+| 1 | Barcode → Open Food Facts | instant | free | 81–96% (US/UK/EU) |
+| 2 | Photograph the label → vision transcription | ~2s | ~$0.004–0.018 | anything with a printed panel |
+| 3 | Manual entry | — | free | last resort |
+
+Tier 2 matters more than the miss rate suggests. **A barcode number contains no information about the product** — it's an arbitrary registry key, so a model asked to identify one will invent a fluent, plausible, entirely fabricated nutrition panel. The fallback therefore reads *pixels of an actual label*, never the digits. And because it doesn't depend on the database at all, it works identically in markets where Open Food Facts coverage is thin.
+
+The model transcribes; the engine scores. That boundary is the whole safety argument.
+
+### Basis conversion
+
+EU panels print per 100 g. US Nutrition Facts print **per serving**. The engine assumes per-100 g throughout, so the extractor reports which basis it read and converts before scoring. A 30 g serving read as 100 g understates sugar by more than 3x — enough to turn a `skip` into a `fits`. When the basis can't be determined, or a per-serving panel has no serving size printed, the scan is refused rather than guessed.
+
 ## Running it
 
 ```bash
@@ -66,15 +82,36 @@ npx expo start
 
 Scan the QR code with Expo Go on your phone.
 
+**For label scanning**, run the proxy in a second terminal:
+
 ```bash
-npx tsx scripts/verify-offline.ts   # scoring assertions, no network
-npx tsx scripts/verify.ts           # live end-to-end against Open Food Facts
-npx tsc --noEmit                    # typecheck
+ANTHROPIC_API_KEY=sk-... node server/proxy.mjs
 ```
+
+Then point the app at it. On a physical phone use your machine's LAN IP — `localhost` resolves to the phone itself:
+
+```bash
+EXPO_PUBLIC_LABEL_SCAN_URL=http://192.168.1.42:8787 npx expo start
+```
+
+**The API key never goes in the app.** Expo inlines every `EXPO_PUBLIC_*` variable into the JavaScript bundle, so a key placed there is extractable by anyone who downloads the app. The proxy exists solely to hold it. The `EXPO_PUBLIC_` variable above is only a URL, which is not a secret.
+
+### Tests
+
+```bash
+npx tsx scripts/verify-offline.ts    # scoring assertions
+npx tsx scripts/verify-labelscan.ts  # label normalization + basis conversion
+npx tsx scripts/verify.ts            # live, hits Open Food Facts
+npx tsc --noEmit                     # typecheck
+```
+
+The first two need no network and no API key.
 
 ## Status
 
-Scoring engine, profile targets, goal-fit verdicts, and the Open Food Facts client are built and tested. App UI is in progress. Label-scan fallback (tier 2) is designed but not yet built.
+Built and tested: scoring engine, profile targets, goal-fit verdicts, Open Food Facts client, app UI, label-scan extraction and normalization.
+
+Not yet built: label scanning is not wired into the scanner screen, so tier 2 isn't reachable from the UI yet. Swap suggestions ("here's a better option") are designed but unbuilt.
 
 ## Attribution and licensing
 
