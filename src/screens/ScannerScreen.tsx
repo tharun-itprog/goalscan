@@ -34,6 +34,8 @@ interface Props {
   profile: Profile;
   onScanned: (outcome: ScanOutcome) => void;
   onEditProfile: () => void;
+  /** Optional so this screen doesn't require wiring it in every caller/test. */
+  onOpenDesignPreview?: () => void;
 }
 
 // expo-camera's BarcodeType union spells these with underscores
@@ -41,7 +43,7 @@ interface Props {
 // keeps this compiling instead of only looking right.
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const;
 
-export default function ScannerScreen({ profile, onScanned, onEditProfile }: Props) {
+export default function ScannerScreen({ profile, onScanned, onEditProfile, onOpenDesignPreview }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [loading, setLoading] = useState(false);
   // Guards against onBarcodeScanned firing repeatedly for the same code while
@@ -154,6 +156,11 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile }: Pro
               <Text style={styles.loadingText}>Looking it up…</Text>
             </View>
           )}
+          {!loading && onOpenDesignPreview && (
+            <Pressable onPress={onOpenDesignPreview} hitSlop={8}>
+              <Text style={styles.designPreviewLink}>Design preview</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -212,6 +219,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   loadingText: { ...type.body, color: colors.text },
+  designPreviewLink: {
+    ...type.small,
+    color: colors.muted,
+    textDecorationLine: 'underline',
+  },
   permissionWrap: {
     flex: 1,
     justifyContent: 'center',

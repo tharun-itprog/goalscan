@@ -12,11 +12,13 @@ import { StatusBar } from 'expo-status-bar';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import ScannerScreen, { type ScanOutcome } from './src/screens/ScannerScreen';
 import ResultScreen from './src/screens/ResultScreen';
+import DesignPreviewScreen from './src/screens/DesignPreviewScreen';
 import { loadProfile } from './src/storage/profile';
 import { colors } from './src/theme';
 import type { Profile } from './src/types';
+import type { ThemeKey } from './src/design/themes';
 
-type Screen = 'onboarding' | 'scanner' | 'result';
+type Screen = 'onboarding' | 'scanner' | 'result' | 'design-preview';
 
 export default function App() {
   const [bootstrapping, setBootstrapping] = useState(true);
@@ -58,6 +60,17 @@ export default function App() {
     setScreen('onboarding');
   }, []);
 
+  const handleOpenDesignPreview = useCallback(() => {
+    setScreen('design-preview');
+  }, []);
+
+  // Nothing to persist — the app owner reviews on-device and tells us which
+  // direction he picked; this just needs to get him back to scanning.
+  const handleChooseDesign = useCallback((key: ThemeKey) => {
+    console.log('Design preview: chosen theme ->', key);
+    setScreen('scanner');
+  }, []);
+
   if (bootstrapping) {
     return (
       <View style={styles.loading}>
@@ -81,12 +94,16 @@ export default function App() {
           profile={profile}
           onScanned={handleScanned}
           onEditProfile={handleEditProfile}
+          onOpenDesignPreview={handleOpenDesignPreview}
         />
       )}
       {screen === 'result' && outcome && (
         <ResultScreen outcome={outcome} onScanAnother={handleScanAnother} />
       )}
-      <StatusBar style="light" />
+      {screen === 'design-preview' && <DesignPreviewScreen onChoose={handleChooseDesign} />}
+      {/* DesignPreviewScreen drives its own per-page StatusBar (dark themes
+          need light content, the light theme needs dark) — stay out of its way. */}
+      {screen !== 'design-preview' && <StatusBar style="light" />}
     </>
   );
 }

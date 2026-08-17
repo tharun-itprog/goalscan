@@ -27,7 +27,8 @@
         {
           "cameraPermission": "GoalScan uses the camera to scan product barcodes."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }
