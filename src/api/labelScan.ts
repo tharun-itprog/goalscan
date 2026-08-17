@@ -25,7 +25,7 @@ const PROXY_URL =
 const TIMEOUT_MS = 30_000; // vision calls are slower than a barcode lookup
 
 /** Shape returned by the proxy. Mirrors the schema in server/proxy.mjs. */
-interface ExtractionResponse {
+export interface ExtractionResponse {
   readable: boolean;
   basis: 'per_100g' | 'per_serving' | 'unknown';
   servingSizeG: number | null;
@@ -52,8 +52,16 @@ export type LabelScanResult =
    * Panel was read but can't be safely converted to the per-100g basis the
    * engine needs. Distinct from 'unreadable' because retaking the photo won't
    * help; we need the serving size from the user instead.
+   *
+   * `raw` carries the already-extracted values so the UI can finish the job
+   * via `completeWithServingSize` once the user supplies a size — retaking the
+   * photo would mean paying for the same extraction twice.
    */
-  | { status: 'needs_serving_size'; productName: string | null }
+  | {
+      status: 'needs_serving_size';
+      productName: string | null;
+      raw: ExtractionResponse;
+    }
   | { status: 'error'; message: string };
 
 /**
@@ -119,6 +127,60 @@ function isPlausible(n: Nutriments): boolean {
   return macroSum <= 105;
 }
 
+/** Assemble a scored-ready Product from an extraction plus its normalized panel. */
+function buildProduct(
+  raw: ExtractionResponse,
+  nutriments: Nutriments,
+  barcode: string,
+): Product {
+  return {
+    barcode,
+    name: raw.productName?.trim() || null,
+    brand: null, // not reliably printed on the nutrition panel
+    nutriments,
+    ingredientsText: raw.ingredientsText?.trim() || null,
+    additiveTags: (raw.additiveCodes ?? []).map((c) => c.toLowerCase()),
+    servingSizeG: raw.servingSizeG,
+    isBeverage: raw.isBeverage,
+    // NOVA is a database classification, not something printed on a packet.
+    // Null makes health.ts fall back to the ingredient-count heuristic.
+    novaGroup: null,
+    source: 'label-scan',
+  };
+}
+
+/** Shared tail of both entry points: validate, convert, build. */
+function finalize(raw: ExtractionResponse, barcode: string): LabelScanResult {
+  if (!raw.readable) return { status: 'unreadable' };
+
+  const nutriments = toPer100g(raw);
+  if (nutriments === null) {
+    return { status: 'needs_serving_size', productName: raw.productName, raw };
+  }
+  if (!isPlausible(nutriments)) return { status: 'unreadable' };
+
+  return { status: 'extracted', product: buildProduct(raw, nutriments, barcode) };
+}
+
+/**
+ * Finish a scan that stalled on a missing serving size, using a size the user
+ * typed in. Reuses the extraction already paid for — no second API call.
+ *
+ * Only meaningful for a `per_serving` panel. An `unknown` basis stays refused:
+ * a serving size doesn't tell us which column was read, so converting would
+ * still be a guess.
+ */
+export function completeWithServingSize(
+  raw: ExtractionResponse,
+  servingSizeG: number,
+  barcode: string,
+): LabelScanResult {
+  if (!Number.isFinite(servingSizeG) || servingSizeG <= 0) {
+    return { status: 'needs_serving_size', productName: raw.productName, raw };
+  }
+  return finalize({ ...raw, servingSizeG }, barcode);
+}
+
 /**
  * Send a label photo for transcription.
  *
@@ -150,31 +212,7 @@ export async function scanLabel(
     }
 
     const raw = (await response.json()) as ExtractionResponse;
-
-    if (!raw.readable) return { status: 'unreadable' };
-
-    const nutriments = toPer100g(raw);
-    if (nutriments === null) {
-      return { status: 'needs_serving_size', productName: raw.productName };
-    }
-    if (!isPlausible(nutriments)) return { status: 'unreadable' };
-
-    const product: Product = {
-      barcode,
-      name: raw.productName?.trim() || null,
-      brand: null, // not reliably on the nutrition panel
-      nutriments,
-      ingredientsText: raw.ingredientsText?.trim() || null,
-      additiveTags: (raw.additiveCodes ?? []).map((c) => c.toLowerCase()),
-      servingSizeG: raw.servingSizeG,
-      isBeverage: raw.isBeverage,
-      // NOVA is a database classification, not something printed on a packet.
-      // Null makes health.ts fall back to the ingredient-count heuristic.
-      novaGroup: null,
-      source: 'label-scan',
-    };
-
-    return { status: 'extracted', product };
+    return finalize(raw, barcode);
   } catch (error) {
     const aborted = error instanceof Error && error.name === 'AbortError';
     return {

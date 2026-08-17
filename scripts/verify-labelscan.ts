@@ -9,7 +9,7 @@
  * Run: npx tsx scripts/verify-labelscan.ts
  */
 
-import { scanLabel } from '../src/api/labelScan';
+import { scanLabel, completeWithServingSize } from '../src/api/labelScan';
 import { computeHealthScore } from '../src/scoring/health';
 
 /** Minimal proxy response; individual tests override what they care about. */
@@ -76,6 +76,35 @@ async function main() {
 
     mockProxy({ ...BASE, basis: 'unknown' });
     check('unknown basis', (await scanLabel('f', '1')).status, 'needs_serving_size');
+  }
+
+  console.log('\nA user-supplied serving size resumes the stalled scan');
+  {
+    // 12g sugar in an unstated serving; user says the serving is 30g.
+    mockProxy({
+      ...BASE, basis: 'per_serving', servingSizeG: null,
+      energyKcal: 150, sugars: 12, proteins: 2, carbohydrates: 20,
+      fat: 6, saturatedFat: 2.5, fiber: 1, saltG: 0.2,
+    });
+    const stalled = await scanLabel('fake', '123');
+    check('stalls first', stalled.status, 'needs_serving_size');
+
+    if (stalled.status === 'needs_serving_size') {
+      // No network call here — the paid extraction is reused.
+      const resumed = completeWithServingSize(stalled.raw, 30, '123');
+      check('resumes to extracted', resumed.status, 'extracted');
+      if (resumed.status === 'extracted') {
+        check('scaled with the typed size', resumed.product.nutriments.sugars, 40);
+      }
+      check('rejects a nonsense size', completeWithServingSize(stalled.raw, 0, '1').status, 'needs_serving_size');
+    }
+
+    // An unknown basis stays refused: a size doesn't reveal which column was read.
+    mockProxy({ ...BASE, basis: 'unknown' });
+    const unknown = await scanLabel('fake', '123');
+    if (unknown.status === 'needs_serving_size') {
+      check('unknown basis stays refused', completeWithServingSize(unknown.raw, 30, '1').status, 'needs_serving_size');
+    }
   }
 
   console.log('\nIllegible and implausible panels are rejected');
