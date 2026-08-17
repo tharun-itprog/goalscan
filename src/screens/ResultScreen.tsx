@@ -7,22 +7,14 @@
  */
 
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Bar from '../components/Bar';
+import ScoreBreakdown from '../components/ScoreBreakdown';
 import type { ScanOutcome } from './ScannerScreen';
 import { colorForGrade, colorForVerdict, colors, labelForVerdict, radii, spacing, type } from '../theme';
-import type { FlaggedAdditive } from '../types';
 
 interface Props {
   outcome: ScanOutcome;
   onScanAnother: () => void;
 }
-
-const RISK_ORDER: Record<FlaggedAdditive['risk'], number> = { high: 0, moderate: 1, low: 2 };
-const RISK_COLOR: Record<FlaggedAdditive['risk'], string> = {
-  high: colors.skip,
-  moderate: colors.caution,
-  low: colors.muted,
-};
 
 export default function ResultScreen({ outcome, onScanAnother }: Props) {
   return (
@@ -48,9 +40,6 @@ function SuccessView({ outcome }: { outcome: Extract<ScanOutcome, { kind: 'succe
   const { product, health, goalFit } = outcome;
   const scoreColor = colorForGrade(health.grade);
   const verdictColor = colorForVerdict(goalFit.verdict);
-  const sortedAdditives = [...health.flaggedAdditives].sort(
-    (a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk],
-  );
 
   return (
     <>
@@ -68,14 +57,7 @@ function SuccessView({ outcome }: { outcome: Extract<ScanOutcome, { kind: 'succe
         <Text style={[styles.grade, { color: scoreColor }]}>{health.grade.toUpperCase()}</Text>
       </View>
 
-      <View style={styles.card}>
-        <Bar label="Nutrition" value={health.breakdown.nutrition} max={60} color={colors.accent} />
-        <Bar label="Additives" value={health.breakdown.additives} max={30} color={colors.accent} />
-        <Bar label="Processing" value={health.breakdown.processing} max={10} color={colors.accent} />
-        {health.incomplete && (
-          <Text style={styles.quietNote}>Some nutrition data was missing for this product.</Text>
-        )}
-      </View>
+      <ScoreBreakdown health={health} />
 
       <View style={[styles.verdictBadge, { borderColor: verdictColor }]}>
         <Text style={[styles.verdictText, { color: verdictColor }]}>
@@ -100,23 +82,6 @@ function SuccessView({ outcome }: { outcome: Extract<ScanOutcome, { kind: 'succe
           </Text>
         ))}
       </View>
-
-      {sortedAdditives.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Flagged additives</Text>
-          {sortedAdditives.map((additive) => (
-            <View key={additive.code} style={styles.additiveRow}>
-              <View style={styles.additiveHeader}>
-                <View style={[styles.riskDot, { backgroundColor: RISK_COLOR[additive.risk] }]} />
-                <Text style={styles.additiveName}>
-                  {additive.name} ({additive.code.toUpperCase()})
-                </Text>
-              </View>
-              <Text style={styles.additiveNote}>{additive.note}</Text>
-            </View>
-          ))}
-        </View>
-      )}
     </>
   );
 }
@@ -169,7 +134,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
-  quietNote: { ...type.small, color: colors.muted, marginTop: spacing.xs },
   verdictBadge: {
     alignSelf: 'center',
     borderWidth: 2,
@@ -196,16 +160,6 @@ const styles = StyleSheet.create({
   },
   body: { ...type.body, color: colors.text, marginBottom: spacing.sm },
   reason: { ...type.body, color: colors.text, marginBottom: spacing.sm, lineHeight: 22 },
-  additiveRow: {
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  additiveHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
-  riskDot: { width: 8, height: 8, borderRadius: 4, marginRight: spacing.sm },
-  additiveName: { ...type.body, color: colors.text, fontWeight: '600' },
-  additiveNote: { ...type.small, color: colors.muted },
   scanAnother: {
     backgroundColor: colors.accent,
     borderRadius: radii.md,
