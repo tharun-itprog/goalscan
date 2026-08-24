@@ -36,7 +36,7 @@ The database is crowdsourced and imperfect, so the engine refuses to score thing
 
 - **Physically impossible values** are discarded (nothing edible exceeds 900 kcal/100 g).
 - **Internally inconsistent panels** are rejected wholesale — if protein + carbs + fat + fiber exceeds 105 g per 100 g, the panel is fabricated and none of it is usable. One real product claimed 52 g of fiber per 100 g, which an earlier build cheerfully reported as *"448% of your daily fiber target"* — a nonsense figure presented to the user as a benefit.
-- **Missing serving sizes** are disclosed rather than silently assumed, because every percentage on screen depends on them.
+- **Serving sizes are never invented.** Every percentage on screen is one multiplication away from the serving size, so when none can be established the app measures per 100 g, says so, and offers a one-tap correction — rather than quietly assuming a number and presenting the result as fact.
 
 A rejected product routes to a label scan instead of a confident wrong answer.
 
@@ -73,6 +73,28 @@ The model transcribes; the engine scores. That boundary is the whole safety argu
 
 EU panels print per 100 g. US Nutrition Facts print **per serving**. The engine assumes per-100 g throughout, so the extractor reports which basis it read and converts before scoring. A 30 g serving read as 100 g understates sugar by more than 3x — enough to turn a `skip` into a `fits`. When the basis can't be determined, or a per-serving panel has no serving size printed, the scan is refused rather than guessed.
 
+### Serving size
+
+The serving size is the most load-bearing number the app handles and the one most often missing. It's resolved from the best source available, and the result screen states which one it used, because they are different claims:
+
+| Source | Wording | Where it comes from |
+|---|---|---|
+| `label` | "in a 45 g serving" | declared serving size, text or normalized |
+| `package` | "in the 45 g pack" | net contents, when small enough to be one serving |
+| `user` | "in your 45 g serving" | the person told us, remembered per barcode |
+| `assumed` | "per 100 g" | nothing established one |
+
+Two conversions are deliberately refused. Open Food Facts normalizes "0.6 cup dry" oats to **144 ml** — accepting that as 144 g would overstate a bowl of oats by two thirds, so millilitres only stand in for grams on drinks. And a 500 g bag of pasta is not one serving, however convenient it would be; the single-serve cut-off is 60 g solid, 500 ml liquid.
+
+Measured on live Open Food Facts samples, serving-size coverage:
+
+| Market | text field alone | all sources |
+|---|---:|---:|
+| United States (300) | 97% | 100% |
+| India (199) | 50% | 71% |
+
+The remaining Indian 29% is why the correction is a control rather than a warning.
+
 ## Running it
 
 ```bash
@@ -101,11 +123,12 @@ EXPO_PUBLIC_LABEL_SCAN_URL=http://192.168.1.42:8787 npx expo start
 ```bash
 npx tsx scripts/verify-offline.ts    # scoring assertions
 npx tsx scripts/verify-labelscan.ts  # label normalization + basis conversion
+npx tsx scripts/verify-serving.ts    # serving-size resolution and wording
 npx tsx scripts/verify.ts            # live, hits Open Food Facts
 npx tsc --noEmit                     # typecheck
 ```
 
-The first two need no network and no API key.
+The first three need no network and no API key.
 
 ## Design
 
@@ -115,7 +138,7 @@ Contrast is a test (`scripts/verify-contrast.ts`), not a judgement call. It has 
 
 ## Status
 
-Built and tested: scoring engine with headline reasons, profile targets, goal-fit verdicts, Open Food Facts client, the full label-scan path from camera to score, and the app UI.
+Built and tested: scoring engine with headline reasons, profile targets, goal-fit verdicts, Open Food Facts client, layered serving-size resolution with a user-editable basis, the full label-scan path from camera to score, and the app UI.
 
 Not yet built: swap suggestions ("here's a better option"), and manual entry as a third fallback.
 

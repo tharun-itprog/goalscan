@@ -9,12 +9,15 @@
  * shared fallback, per the "handle failure states explicitly" requirement.
  */
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import BreakdownScreen from './BreakdownScreen';
 import NotFoundScreen from './NotFoundScreen';
 import type { ScanOutcome } from './ScannerScreen';
 import PrimaryButton from '../components/PrimaryButton';
+import ServingBasis from '../components/ServingBasis';
+import { evaluateProduct } from '../scan/evaluate';
+import { loadServingOverride, saveServingOverride } from '../storage/servings';
 import {
   colorForGrade,
   colorForVerdict,
@@ -102,7 +105,48 @@ function SuccessScreen({
   onScanAnother: () => void;
 }) {
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const { product, health, goalFit } = outcome;
+
+  /**
+   * A serving size the user has set for this barcode, if they ever have.
+   *
+   * Applying it here rather than in each scan path is deliberate: both tiers
+   * hand this screen a Product, so one place applies the override, one place
+   * edits it, and there is no way for the two scan paths to disagree about a
+   * user's own correction.
+   */
+  const [override, setOverride] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    loadServingOverride(outcome.product.barcode).then((grams) => {
+      if (live) setOverride(grams);
+    });
+    return () => {
+      live = false;
+    };
+  }, [outcome.product.barcode]);
+
+  /**
+   * Re-running the whole evaluation on an override — rather than rescaling the
+   * percentages in place — keeps one code path. The health score is computed
+   * per 100 g and doesn't move; goal fit does, including which finding leads
+   * the headline, which is exactly what should change when the amount changes.
+   */
+  const { product, health, goalFit } = useMemo(() => {
+    if (override === null) return outcome;
+    return evaluateProduct(
+      { ...outcome.product, servingSizeG: override, servingSource: 'user' },
+      profile,
+    );
+  }, [outcome, override, profile]);
+
+  const applyServing = useCallback(
+    (grams: number) => {
+      setOverride(grams);
+      void saveServingOverride(outcome.product.barcode, grams);
+    },
+    [outcome.product.barcode],
+  );
 
   if (showBreakdown) {
     return <BreakdownScreen health={health} onBack={() => setShowBreakdown(false)} />;
@@ -115,7 +159,9 @@ function SuccessScreen({
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* The serving editor sits mid-screen; without this its input can end up
+          under the keyboard on a short phone. */}
+      <ScrollView contentContainerStyle={styles.content} automaticallyAdjustKeyboardInsets>
         {product.brand && <Text style={styles.brand}>{product.brand}</Text>}
         <Text style={styles.productName}>{product.name ?? 'Unnamed product'}</Text>
 
@@ -159,16 +205,13 @@ function SuccessScreen({
           ))}
         </View>
 
-        {goalFit.servingWasEstimated ? (
-          <Text style={styles.servingLineWarning}>
-            Assumed {goalFit.servingSizeG} {servingUnit} serving — no size on the label, so every
-            percentage above depends on this guess.
-          </Text>
-        ) : (
-          <Text style={styles.servingLine}>
-            per {goalFit.servingSizeG} {servingUnit} serving
-          </Text>
-        )}
+        <ServingBasis
+          grams={goalFit.servingSizeG}
+          source={goalFit.servingSource}
+          unit={servingUnit}
+          packageQuantityG={product.packageQuantityG}
+          onChange={applyServing}
+        />
 
         <View style={styles.actions}>
           <PrimaryButton label="Scan another" onPress={onScanAnother} />
@@ -235,8 +278,6 @@ const styles = StyleSheet.create({
   sectionLabel: { ...type.label, color: colors.muted, marginBottom: spacing.sm },
   bulletList: { marginBottom: spacing.lg },
   bullet: { ...type.body, color: colors.text, marginBottom: spacing.sm, lineHeight: 22 },
-  servingLine: { ...type.small, color: colors.muted, marginBottom: spacing.lg },
-  servingLineWarning: { ...type.small, color: colors.caution, marginBottom: spacing.lg },
   actions: { marginBottom: spacing.lg },
   attribution: { ...type.small, color: colors.muted, textAlign: 'center' },
   errorWrap: { flex: 1, padding: spacing.lg, justifyContent: 'center' },

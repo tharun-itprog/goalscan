@@ -19,15 +19,17 @@ import type {
   Goal,
   GoalFit,
   Product,
+  ServingSource,
   Verdict,
 } from '../types';
 
 /**
- * Fallback serving size when the label doesn't declare one.
+ * Last-resort serving size, used only when no source could establish one.
  *
- * 100 g keeps the arithmetic honest and matches the unit the panel is already
- * in — but it is frequently wrong (nobody eats 100 g of crisps), so we flag it
- * and the UI must let the user correct it.
+ * 100 g matches the unit the panel is already in, so the arithmetic stays
+ * honest — but it is frequently wrong (nobody eats 100 g of crisps), which is
+ * why every phrase built from it says "per 100 g" rather than "a serving",
+ * and why the result screen offers a one-tap correction.
  */
 const DEFAULT_SERVING_G = 100;
 
@@ -73,19 +75,28 @@ export function computeGoalFit(
 ): GoalFit {
   const servingWasEstimated = product.servingSizeG === null;
   const servingSizeG = product.servingSizeG ?? DEFAULT_SERVING_G;
+  const servingSource: ServingSource = product.servingSizeG === null
+    ? 'assumed'
+    : product.servingSource ?? 'label';
   const scale = servingSizeG / 100;
 
   /**
    * How a headline refers to the amount it just quoted.
    *
-   * When the serving size was assumed, the figures are literally per-100g, so
-   * saying "in a serving" would be a claim we haven't earned — the honest
-   * phrasing is the one that names the basis.
+   * Each source gets its own wording, because they are different claims. Only
+   * `label` earns the unqualified "a serving" — a package size is our
+   * inference, a user figure is theirs, and an assumed one isn't a serving at
+   * all, so it names the basis instead.
    */
   const unit = product.isBeverage ? 'ml' : 'g';
-  const per = servingWasEstimated
-    ? `per 100 ${unit}`
-    : `in a ${g(servingSizeG)} ${unit} serving`;
+  const amount = `${g(servingSizeG)} ${unit}`;
+  const PER_SOURCE: Record<ServingSource, string> = {
+    label: `in a ${amount} serving`,
+    package: `in the ${amount} pack`,
+    user: `in your ${amount} serving`,
+    assumed: `per 100 ${unit}`,
+  };
+  const per = PER_SOURCE[servingSource];
 
   const n = product.nutriments;
   /** Scale a per-100g value to this serving. Null stays null. */
@@ -239,9 +250,13 @@ export function computeGoalFit(
     reasons.push('Nothing here works against your goal');
   }
 
-  if (servingWasEstimated) {
+  if (servingSource === 'assumed') {
     reasons.push(
       `No serving size on the label — figures are per 100 ${unit}. Set a serving for an accurate read.`,
+    );
+  } else if (servingSource === 'package') {
+    reasons.push(
+      `No serving size declared — measured against the whole ${amount} pack.`,
     );
   }
 
@@ -251,6 +266,7 @@ export function computeGoalFit(
     reasons,
     contribution,
     servingSizeG,
+    servingSource,
     servingWasEstimated,
   };
 }

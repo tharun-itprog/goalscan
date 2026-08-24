@@ -25,7 +25,8 @@ function product(overrides: Partial<Product> & { nutriments: Product['nutriments
     barcode: '0000000000000',
     name: 'Test', brand: null,
     ingredientsText: null, additiveTags: [],
-    servingSizeG: null, isBeverage: false, novaGroup: null,
+    servingSizeG: null, servingSource: null, packageQuantityG: null,
+    isBeverage: false, novaGroup: null,
     source: 'openfoodfacts',
     ...overrides,
   };

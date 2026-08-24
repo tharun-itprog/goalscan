@@ -21,6 +21,15 @@ export interface Nutriments {
   fruitsVegetablesNuts: number | null;
 }
 
+/**
+ * Where a serving size came from.
+ *
+ * Every percentage on the result screen is computed against the serving size,
+ * so a number read off the label and a number we invented deserve very
+ * different amounts of trust — and the UI has to be able to say which it has.
+ */
+export type ServingSource = 'label' | 'package' | 'user' | 'assumed';
+
 export interface Product {
   barcode: string;
   name: string | null;
@@ -30,8 +39,16 @@ export interface Product {
   ingredientsText: string | null;
   /** OFF additive tags, e.g. "en:e471". Lowercased on ingest. */
   additiveTags: string[];
-  /** Serving size in grams, if we could parse one. Null forces a fallback. */
+  /** Serving size in grams, if we could establish one. Null forces a fallback. */
   servingSizeG: number | null;
+  /** Where servingSizeG came from. Null when we don't have one at all. */
+  servingSource: Exclude<ServingSource, 'assumed'> | null;
+  /**
+   * Net weight or volume of the whole package, when the data has it. Not used
+   * in scoring — it powers the "whole pack" shortcut when the user is setting
+   * a serving size by hand, which is the commonest correction by far.
+   */
+  packageQuantityG: number | null;
   /** Drinks are scored on a separate, stricter Nutri-Score table. */
   isBeverage: boolean;
   /**
@@ -149,7 +166,9 @@ export interface GoalFit {
   };
   /** Grams the contribution figures were computed against. */
   servingSizeG: number;
-  /** True when servingSizeG was a category default, not from the label. */
+  /** Where that number came from, so the screen can state it plainly. */
+  servingSource: ServingSource;
+  /** True when servingSizeG was a fallback, not established from any source. */
   servingWasEstimated: boolean;
 }
 

@@ -132,6 +132,7 @@ function buildProduct(
   raw: ExtractionResponse,
   nutriments: Nutriments,
   barcode: string,
+  servingSource: 'label' | 'user',
 ): Product {
   return {
     barcode,
@@ -141,6 +142,13 @@ function buildProduct(
     ingredientsText: raw.ingredientsText?.trim() || null,
     additiveTags: (raw.additiveCodes ?? []).map((c) => c.toLowerCase()),
     servingSizeG: raw.servingSizeG,
+    // A serving size the user typed in is theirs, not the label's, and the
+    // result screen words the two differently. A per-100g panel legitimately
+    // has no serving size at all, which stays null.
+    servingSource: raw.servingSizeG === null ? null : servingSource,
+    // Net contents aren't part of the nutrition panel, so a label scan never
+    // learns them. Only the database path can offer the "whole pack" shortcut.
+    packageQuantityG: null,
     isBeverage: raw.isBeverage,
     // NOVA is a database classification, not something printed on a packet.
     // Null makes health.ts fall back to the ingredient-count heuristic.
@@ -150,7 +158,11 @@ function buildProduct(
 }
 
 /** Shared tail of both entry points: validate, convert, build. */
-function finalize(raw: ExtractionResponse, barcode: string): LabelScanResult {
+function finalize(
+  raw: ExtractionResponse,
+  barcode: string,
+  servingSource: 'label' | 'user' = 'label',
+): LabelScanResult {
   if (!raw.readable) return { status: 'unreadable' };
 
   const nutriments = toPer100g(raw);
@@ -159,7 +171,10 @@ function finalize(raw: ExtractionResponse, barcode: string): LabelScanResult {
   }
   if (!isPlausible(nutriments)) return { status: 'unreadable' };
 
-  return { status: 'extracted', product: buildProduct(raw, nutriments, barcode) };
+  return {
+    status: 'extracted',
+    product: buildProduct(raw, nutriments, barcode, servingSource),
+  };
 }
 
 /**
@@ -178,7 +193,7 @@ export function completeWithServingSize(
   if (!Number.isFinite(servingSizeG) || servingSizeG <= 0) {
     return { status: 'needs_serving_size', productName: raw.productName, raw };
   }
-  return finalize({ ...raw, servingSizeG }, barcode);
+  return finalize({ ...raw, servingSizeG }, barcode, 'user');
 }
 
 /**
