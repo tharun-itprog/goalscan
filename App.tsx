@@ -9,18 +9,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import ScannerScreen, { type ScanOutcome } from './src/screens/ScannerScreen';
 import ResultScreen from './src/screens/ResultScreen';
-import DesignPreviewScreen from './src/screens/DesignPreviewScreen';
 import { loadProfile } from './src/storage/profile';
+import { FONT_MAP } from './src/fonts';
 import { colors } from './src/theme';
 import type { Profile } from './src/types';
-import type { ThemeKey } from './src/design/themes';
 
-type Screen = 'onboarding' | 'scanner' | 'result' | 'design-preview';
+type Screen = 'onboarding' | 'scanner' | 'result';
 
 export default function App() {
+  // React Native has no font-weight synthesis for custom fonts — every text
+  // style in the design system carries its weight via fontFamily, so any
+  // text drawn before these resolve falls back to the system font and
+  // undoes the whole design. Nothing renders until this is true.
+  const [fontsLoaded] = useFonts(FONT_MAP);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [screen, setScreen] = useState<Screen>('onboarding');
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -60,22 +65,18 @@ export default function App() {
     setScreen('onboarding');
   }, []);
 
-  const handleOpenDesignPreview = useCallback(() => {
-    setScreen('design-preview');
-  }, []);
-
-  // Nothing to persist — the app owner reviews on-device and tells us which
-  // direction he picked; this just needs to get him back to scanning.
-  const handleChooseDesign = useCallback((key: ThemeKey) => {
-    console.log('Design preview: chosen theme ->', key);
-    setScreen('scanner');
-  }, []);
+  if (!fontsLoaded) {
+    // Render nothing until the custom faces are ready, rather than the
+    // spinner below — that would itself draw a frame while text elsewhere
+    // is still queued to render in the system font.
+    return <View style={styles.loading} />;
+  }
 
   if (bootstrapping) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={colors.accent} size="large" />
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -90,20 +91,14 @@ export default function App() {
         />
       )}
       {screen === 'scanner' && profile && (
-        <ScannerScreen
-          profile={profile}
-          onScanned={handleScanned}
-          onEditProfile={handleEditProfile}
-          onOpenDesignPreview={handleOpenDesignPreview}
-        />
+        <ScannerScreen profile={profile} onScanned={handleScanned} onEditProfile={handleEditProfile} />
       )}
-      {screen === 'result' && outcome && (
-        <ResultScreen outcome={outcome} onScanAnother={handleScanAnother} />
+      {screen === 'result' && outcome && profile && (
+        <ResultScreen outcome={outcome} profile={profile} onScanAnother={handleScanAnother} />
       )}
-      {screen === 'design-preview' && <DesignPreviewScreen onChoose={handleChooseDesign} />}
-      {/* DesignPreviewScreen drives its own per-page StatusBar (dark themes
-          need light content, the light theme needs dark) — stay out of its way. */}
-      {screen !== 'design-preview' && <StatusBar style="light" />}
+      {/* The scanner is the app's one dark screen and needs light status-bar
+          content; every other screen sits on the light background. */}
+      <StatusBar style={screen === 'scanner' ? 'light' : 'dark'} />
     </>
   );
 }

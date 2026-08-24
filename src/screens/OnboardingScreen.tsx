@@ -1,10 +1,13 @@
 /**
  * Collects the Profile that everything downstream (targets -> goal fit) is
- * computed against. Kept to six fields on purpose — every extra field is
- * another chance someone abandons setup before ever scanning anything.
+ * computed against — one question per screen rather than a single long form.
+ * Kept to five steps on purpose: every extra tap between "open the app" and
+ * "start scanning" is another chance someone abandons setup, and a single
+ * long form hides that cost by making it feel like one screen instead of six
+ * decisions.
  */
 
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +19,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import ProgressSteps from '../components/ProgressSteps';
+import PrimaryButton from '../components/PrimaryButton';
 import SegmentedControl from '../components/SegmentedControl';
 import { saveProfile } from '../storage/profile';
 import { colors, radii, spacing, type } from '../theme';
@@ -55,172 +60,214 @@ const RANGES = {
   weightKg: { min: 30, max: 300 },
 };
 
-type FieldErrors = Partial<Record<'age' | 'heightCm' | 'weightKg', string>>;
+const TOTAL_STEPS = 5;
+
+function ageError(raw: string): string | null {
+  if (!raw.trim()) return null; // don't shout "invalid" before they've typed anything
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 'Enter a number';
+  if (n < RANGES.age.min || n > RANGES.age.max) return `Must be ${RANGES.age.min}-${RANGES.age.max}`;
+  return null;
+}
+
+function heightError(raw: string): string | null {
+  if (!raw.trim()) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 'Enter a number';
+  if (n < RANGES.heightCm.min || n > RANGES.heightCm.max) {
+    return `Must be ${RANGES.heightCm.min}-${RANGES.heightCm.max} cm`;
+  }
+  return null;
+}
+
+function weightError(raw: string): string | null {
+  if (!raw.trim()) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 'Enter a number';
+  if (n < RANGES.weightKg.min || n > RANGES.weightKg.max) {
+    return `Must be ${RANGES.weightKg.min}-${RANGES.weightKg.max} kg`;
+  }
+  return null;
+}
 
 export default function OnboardingScreen({ initialProfile, onSaved, onCancel }: Props) {
+  const [step, setStep] = useState(0);
+
   // Numeric fields are kept as strings while editing so the user can clear a
   // field or type "1" of "18" without the input fighting a parsed number.
   const [age, setAge] = useState(initialProfile ? String(initialProfile.age) : '');
-  const [heightCm, setHeightCm] = useState(
-    initialProfile ? String(initialProfile.heightCm) : '',
-  );
-  const [weightKg, setWeightKg] = useState(
-    initialProfile ? String(initialProfile.weightKg) : '',
-  );
-  const [sex, setSex] = useState<Sex>(initialProfile?.sex ?? 'female');
-  const [activity, setActivity] = useState<ActivityLevel>(
-    initialProfile?.activity ?? 'moderate',
-  );
-  const [goal, setGoal] = useState<Goal>(initialProfile?.goal ?? 'maintain');
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const [heightCm, setHeightCm] = useState(initialProfile ? String(initialProfile.heightCm) : '');
+  const [weightKg, setWeightKg] = useState(initialProfile ? String(initialProfile.weightKg) : '');
+  // Choice fields start at null (not a silently-preselected default) so
+  // Continue staying disabled actually means something on first launch.
+  // Editing an existing profile prefills them, same as the numeric fields.
+  const [sex, setSex] = useState<Sex | null>(initialProfile?.sex ?? null);
+  const [activity, setActivity] = useState<ActivityLevel | null>(initialProfile?.activity ?? null);
+  const [goal, setGoal] = useState<Goal | null>(initialProfile?.goal ?? null);
   const [saving, setSaving] = useState(false);
 
-  function validate(): { profile: Profile } | { errors: FieldErrors } {
-    const nextErrors: FieldErrors = {};
+  const ageErr = ageError(age);
+  const heightErr = heightError(heightCm);
+  const weightErr = weightError(weightKg);
 
-    const ageNum = Number(age);
-    if (!age.trim() || !Number.isFinite(ageNum)) {
-      nextErrors.age = 'Enter an age';
-    } else if (ageNum < RANGES.age.min || ageNum > RANGES.age.max) {
-      nextErrors.age = `Must be ${RANGES.age.min}-${RANGES.age.max}`;
+  const stepValid = useMemo(() => {
+    switch (step) {
+      case 0:
+        return age.trim() !== '' && ageErr === null;
+      case 1:
+        return sex !== null;
+      case 2:
+        return heightCm.trim() !== '' && heightErr === null && weightKg.trim() !== '' && weightErr === null;
+      case 3:
+        return activity !== null;
+      case 4:
+        return goal !== null;
+      default:
+        return false;
     }
+  }, [step, age, ageErr, sex, heightCm, heightErr, weightKg, weightErr, activity, goal]);
 
-    const heightNum = Number(heightCm);
-    if (!heightCm.trim() || !Number.isFinite(heightNum)) {
-      nextErrors.heightCm = 'Enter a height';
-    } else if (heightNum < RANGES.heightCm.min || heightNum > RANGES.heightCm.max) {
-      nextErrors.heightCm = `Must be ${RANGES.heightCm.min}-${RANGES.heightCm.max} cm`;
-    }
-
-    const weightNum = Number(weightKg);
-    if (!weightKg.trim() || !Number.isFinite(weightNum)) {
-      nextErrors.weightKg = 'Enter a weight';
-    } else if (weightNum < RANGES.weightKg.min || weightNum > RANGES.weightKg.max) {
-      nextErrors.weightKg = `Must be ${RANGES.weightKg.min}-${RANGES.weightKg.max} kg`;
-    }
-
-    if (Object.keys(nextErrors).length > 0) return { errors: nextErrors };
-
-    return {
-      profile: {
-        age: Math.round(ageNum),
-        sex,
-        heightCm: heightNum,
-        weightKg: weightNum,
-        activity,
-        goal,
-      },
-    };
-  }
-
-  async function handleSubmit() {
-    const result = validate();
-    if ('errors' in result) {
-      setErrors(result.errors);
+  async function handleContinue() {
+    if (!stepValid) return;
+    if (step < TOTAL_STEPS - 1) {
+      setStep((s) => s + 1);
       return;
     }
-    setErrors({});
+    // Final step — everything above has already been validated as it was
+    // entered, so this is just assembling and persisting the result.
+    const profile: Profile = {
+      age: Math.round(Number(age)),
+      sex: sex as Sex,
+      heightCm: Number(heightCm),
+      weightKg: Number(weightKg),
+      activity: activity as ActivityLevel,
+      goal: goal as Goal,
+    };
     setSaving(true);
     try {
-      await saveProfile(result.profile);
-      onSaved(result.profile);
+      await saveProfile(profile);
+      onSaved(profile);
     } finally {
       setSaving(false);
     }
   }
 
+  function handleBack() {
+    if (step > 0) {
+      setStep((s) => s - 1);
+    } else if (onCancel) {
+      onCancel();
+    }
+  }
+
+  const showBack = step > 0 || !!onCancel;
+
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={styles.title}>
-            {initialProfile ? 'Edit profile' : 'Set up your profile'}
-          </Text>
-          <Text style={styles.subtitle}>
-            This drives your daily budget — every scan is judged against it, not
-            a generic average.
-          </Text>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <ProgressSteps step={step + 1} total={TOTAL_STEPS} />
+          <Text style={styles.stepLabel}>STEP {step + 1} OF {TOTAL_STEPS}</Text>
 
-          <Field label="Age">
-            <TextInput
-              style={styles.input}
-              value={age}
-              onChangeText={setAge}
-              keyboardType="numeric"
-              placeholder="e.g. 27"
-              placeholderTextColor={colors.muted}
-              maxLength={3}
-            />
-            {errors.age && <Text style={styles.error}>{errors.age}</Text>}
-          </Field>
-
-          <Field label="Sex">
-            <SegmentedControl options={SEX_OPTIONS} value={sex} onChange={setSex} />
-          </Field>
-
-          <Field label="Height (cm)">
-            <TextInput
-              style={styles.input}
-              value={heightCm}
-              onChangeText={setHeightCm}
-              keyboardType="numeric"
-              placeholder="e.g. 170"
-              placeholderTextColor={colors.muted}
-              maxLength={3}
-            />
-            {errors.heightCm && <Text style={styles.error}>{errors.heightCm}</Text>}
-          </Field>
-
-          <Field label="Weight (kg)">
-            <TextInput
-              style={styles.input}
-              value={weightKg}
-              onChangeText={setWeightKg}
-              keyboardType="numeric"
-              placeholder="e.g. 65"
-              placeholderTextColor={colors.muted}
-              maxLength={3}
-            />
-            {errors.weightKg && <Text style={styles.error}>{errors.weightKg}</Text>}
-          </Field>
-
-          <Field label="Activity level">
-            <SegmentedControl
-              options={ACTIVITY_OPTIONS}
-              value={activity}
-              onChange={setActivity}
-              direction="column"
-            />
-          </Field>
-
-          <Field label="Goal">
-            <SegmentedControl options={GOAL_OPTIONS} value={goal} onChange={setGoal} />
-          </Field>
-
-          <Pressable
-            style={({ pressed }) => [styles.submit, pressed && styles.submitPressed]}
-            onPress={handleSubmit}
-            disabled={saving}
-          >
-            <Text style={styles.submitText}>
-              {saving ? 'Saving…' : initialProfile ? 'Save changes' : 'Start scanning'}
-            </Text>
-          </Pressable>
-
-          {onCancel && (
-            <Pressable style={styles.cancel} onPress={onCancel} disabled={saving}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
+          {step === 0 && (
+            <StepBody
+              question="How old are you?"
+              support="Used to calculate your daily calorie and macro targets."
+            >
+              <TextInput
+                style={styles.input}
+                value={age}
+                onChangeText={setAge}
+                keyboardType="numeric"
+                placeholder="e.g. 27"
+                placeholderTextColor={colors.muted}
+                maxLength={3}
+                autoFocus
+              />
+              {ageErr && <Text style={styles.error}>{ageErr}</Text>}
+            </StepBody>
           )}
+
+          {step === 1 && (
+            <StepBody question="What's your sex?" support="Metabolic rate differs by sex — this keeps your targets accurate.">
+              <SegmentedControl options={SEX_OPTIONS} value={sex} onChange={setSex} />
+            </StepBody>
+          )}
+
+          {step === 2 && (
+            <StepBody question="What's your height and weight?" support="These anchor your basal metabolic rate.">
+              <Field label="Height (cm)">
+                <TextInput
+                  style={styles.input}
+                  value={heightCm}
+                  onChangeText={setHeightCm}
+                  keyboardType="numeric"
+                  placeholder="e.g. 170"
+                  placeholderTextColor={colors.muted}
+                  maxLength={3}
+                />
+                {heightErr && <Text style={styles.error}>{heightErr}</Text>}
+              </Field>
+              <Field label="Weight (kg)">
+                <TextInput
+                  style={styles.input}
+                  value={weightKg}
+                  onChangeText={setWeightKg}
+                  keyboardType="numeric"
+                  placeholder="e.g. 65"
+                  placeholderTextColor={colors.muted}
+                  maxLength={3}
+                />
+                {weightErr && <Text style={styles.error}>{weightErr}</Text>}
+              </Field>
+            </StepBody>
+          )}
+
+          {step === 3 && (
+            <StepBody question="How active are you day to day?" support="More activity means a higher calorie budget.">
+              <SegmentedControl options={ACTIVITY_OPTIONS} value={activity} onChange={setActivity} />
+            </StepBody>
+          )}
+
+          {step === 4 && (
+            <StepBody question="What's your goal?" support="Every scan is judged against this, not a generic average.">
+              <SegmentedControl options={GOAL_OPTIONS} value={goal} onChange={setGoal} />
+            </StepBody>
+          )}
+
+          <View style={styles.actions}>
+            <PrimaryButton
+              label={
+                saving
+                  ? 'Saving…'
+                  : step < TOTAL_STEPS - 1
+                    ? 'Continue'
+                    : initialProfile
+                      ? 'Save changes'
+                      : 'Start scanning'
+              }
+              onPress={handleContinue}
+              disabled={!stepValid || saving}
+            />
+            {showBack && (
+              <Pressable style={styles.back} onPress={handleBack} disabled={saving}>
+                <Text style={styles.backText}>Back</Text>
+              </Pressable>
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function StepBody({ question, support, children }: { question: string; support?: string; children: ReactNode }) {
+  return (
+    <View style={styles.stepBody}>
+      <Text style={styles.question}>{question}</Text>
+      {support && <Text style={styles.support}>{support}</Text>}
+      <View style={styles.stepContent}>{children}</View>
+    </View>
   );
 }
 
@@ -236,9 +283,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
-  title: { ...type.h1, color: colors.text, marginBottom: spacing.xs },
-  subtitle: { ...type.body, color: colors.muted, marginBottom: spacing.xl },
+  content: { flexGrow: 1, padding: spacing.lg, paddingBottom: spacing.xxl },
+  stepLabel: {
+    ...type.label,
+    color: colors.muted,
+    marginTop: spacing.md,
+  },
+  stepBody: { marginTop: spacing.lg },
+  question: { ...type.h1, color: colors.text, marginBottom: spacing.xs },
+  support: { ...type.body, color: colors.muted, marginBottom: spacing.lg },
+  stepContent: { marginTop: spacing.md },
   field: { marginBottom: spacing.lg },
   fieldLabel: {
     ...type.label,
@@ -257,15 +311,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 4,
   },
   error: { ...type.small, color: colors.skip, marginTop: spacing.xs },
-  submit: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  submitPressed: { opacity: 0.85 },
-  submitText: { ...type.h2, color: colors.bg },
-  cancel: { alignItems: 'center', paddingVertical: spacing.md },
-  cancelText: { ...type.body, color: colors.muted },
+  actions: { marginTop: spacing.xl, gap: spacing.sm },
+  back: { alignItems: 'center', paddingVertical: spacing.md },
+  backText: { ...type.body, color: colors.muted },
 });

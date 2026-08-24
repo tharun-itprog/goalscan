@@ -5,6 +5,10 @@
  * that has both a freshly-looked-up Product and the Profile needed to derive
  * targets — computing it one level up would mean threading the same two
  * things through App.tsx for no benefit.
+ *
+ * This is the app's one dark screen — a viewfinder wants a dark frame — so it
+ * draws exclusively from `colors.dark.*`. See theme.ts for why the light-
+ * ground semantic colours can't just be reused here.
  */
 
 import { useCallback, useRef, useState } from 'react';
@@ -17,6 +21,7 @@ import {
   View,
 } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import SecondaryButton from '../components/SecondaryButton';
 import { isScorable, lookupBarcode } from '../api/openfoodfacts';
 import { computeTargets } from '../profile/targets';
 import { computeHealthScore } from '../scoring/health';
@@ -34,8 +39,6 @@ interface Props {
   profile: Profile;
   onScanned: (outcome: ScanOutcome) => void;
   onEditProfile: () => void;
-  /** Optional so this screen doesn't require wiring it in every caller/test. */
-  onOpenDesignPreview?: () => void;
 }
 
 // expo-camera's BarcodeType union spells these with underscores
@@ -43,9 +46,13 @@ interface Props {
 // keeps this compiling instead of only looking right.
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const;
 
-export default function ScannerScreen({ profile, onScanned, onEditProfile, onOpenDesignPreview }: Props) {
+export default function ScannerScreen({ profile, onScanned, onEditProfile }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [loading, setLoading] = useState(false);
+  // Toggled by the "no barcode" fallback button below — the label-scan flow
+  // isn't wired up yet, so this just tells the user it's coming rather than
+  // pretending to do something.
+  const [showComingSoon, setShowComingSoon] = useState(false);
   // Guards against onBarcodeScanned firing repeatedly for the same code while
   // a lookup is in flight — CameraView keeps scanning every frame until the
   // component unmounts or is told otherwise.
@@ -98,7 +105,7 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile, onOpe
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.permissionWrap}>
-          <ActivityIndicator color={colors.accent} size="large" />
+          <ActivityIndicator color={colors.dark.accent} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -114,9 +121,9 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile, onOpe
             doesn't take photos or store camera data.
           </Text>
           {permission.canAskAgain ? (
-            <Pressable style={styles.grantButton} onPress={requestPermission}>
-              <Text style={styles.grantButtonText}>Grant camera access</Text>
-            </Pressable>
+            <View style={styles.permissionButton}>
+              <SecondaryButton label="Grant camera access" onPress={requestPermission} tone="dark" />
+            </View>
           ) : (
             <Text style={styles.permissionBody}>
               Access was denied. Enable the camera for GoalScan in your device
@@ -139,27 +146,35 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile, onOpe
 
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
-          <Text style={styles.hint}>Point the camera at a barcode</Text>
-          <Pressable style={styles.editButton} onPress={onEditProfile}>
+          <View />
+          <Pressable style={styles.editButton} onPress={onEditProfile} hitSlop={8}>
             <Text style={styles.editButtonText}>Edit profile</Text>
           </Pressable>
         </View>
 
-        <View style={styles.reticleWrap} pointerEvents="none">
-          <View style={styles.reticle} />
+        <View style={styles.centerWrap} pointerEvents="none">
+          <View style={styles.reticle}>
+            <View style={styles.scanLine} />
+          </View>
+          <Text style={styles.title}>Point at the barcode</Text>
+          <Text style={styles.hint}>It scans automatically once it's in frame.</Text>
         </View>
 
         <View style={styles.bottomBar}>
-          {loading && (
+          {loading ? (
             <View style={styles.loadingWrap}>
-              <ActivityIndicator color={colors.accent} size="large" />
+              <ActivityIndicator color={colors.dark.accent} size="large" />
               <Text style={styles.loadingText}>Looking it up…</Text>
             </View>
-          )}
-          {!loading && onOpenDesignPreview && (
-            <Pressable onPress={onOpenDesignPreview} hitSlop={8}>
-              <Text style={styles.designPreviewLink}>Design preview</Text>
-            </Pressable>
+          ) : (
+            <View style={styles.fallbackWrap} pointerEvents="box-none">
+              <SecondaryButton
+                label="No barcode? Photograph the label"
+                tone="dark"
+                onPress={() => setShowComingSoon(true)}
+              />
+              {showComingSoon && <Text style={styles.comingSoon}>Label scanning is coming soon.</Text>}
+            </View>
           )}
         </View>
       </View>
@@ -170,7 +185,7 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile, onOpe
 const RETICLE_SIZE = 260;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.dark.bg },
   overlay: {
     flex: 1,
     justifyContent: 'space-between',
@@ -182,62 +197,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  hint: {
-    ...type.small,
-    color: colors.text,
-    backgroundColor: 'rgba(15,17,21,0.7)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    overflow: 'hidden',
-  },
   editButton: {
-    backgroundColor: 'rgba(15,17,21,0.7)',
+    backgroundColor: colors.dark.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: radii.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.dark.border,
   },
-  editButtonText: { ...type.small, color: colors.text },
-  reticleWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  editButtonText: { ...type.small, color: colors.dark.text },
+  centerWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
   reticle: {
     width: RETICLE_SIZE,
     height: RETICLE_SIZE * 0.6,
     borderRadius: radii.md,
     borderWidth: 3,
-    borderColor: colors.accent,
+    borderColor: colors.dark.accent,
+    marginBottom: spacing.lg,
+    alignItems: 'stretch',
+    justifyContent: 'center',
   },
+  scanLine: {
+    height: 1,
+    backgroundColor: colors.dark.accent,
+    marginHorizontal: spacing.md,
+  },
+  title: { ...type.h2, color: colors.dark.text, textAlign: 'center' },
+  hint: { ...type.small, color: colors.dark.muted, textAlign: 'center', marginTop: spacing.xs },
   bottomBar: {
     minHeight: spacing.xxl * 2,
     alignItems: 'center',
     justifyContent: 'flex-end',
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },
+  fallbackWrap: { width: '100%', alignItems: 'center', gap: spacing.sm },
   loadingWrap: {
     alignItems: 'center',
     gap: spacing.sm,
   },
-  loadingText: { ...type.body, color: colors.text },
-  designPreviewLink: {
-    ...type.small,
-    color: colors.muted,
-    textDecorationLine: 'underline',
-  },
+  loadingText: { ...type.body, color: colors.dark.text },
+  comingSoon: { ...type.small, color: colors.dark.muted },
   permissionWrap: {
     flex: 1,
     justifyContent: 'center',
     padding: spacing.xl,
     gap: spacing.md,
   },
-  permissionTitle: { ...type.h1, color: colors.text },
-  permissionBody: { ...type.body, color: colors.muted },
-  grantButton: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  grantButtonText: { ...type.h2, color: colors.bg },
+  permissionTitle: { ...type.h1, color: colors.dark.text },
+  permissionBody: { ...type.body, color: colors.dark.muted },
+  permissionButton: { marginTop: spacing.md },
 });
