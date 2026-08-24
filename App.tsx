@@ -1,9 +1,14 @@
 /**
  * Top-level navigation: plain useState over four screens, no router.
  *
- * onboarding -> scanner -> result, with two ways back to onboarding
- * (first launch with no saved profile, or the explicit "edit profile" link
- * on the scanner) and one way back to scanner ("scan another" / retry).
+ * onboarding -> scanner -> result, with one way back to scanner ("scan
+ * another" / retry). Onboarding is reached on first launch with no saved
+ * profile, and thereafter only through the profile screen, which both the
+ * scanner and the result screen open.
+ *
+ * `profileReturn` is why profile isn't just another entry in the same
+ * useState: the result screen holds a scan the user hasn't finished reading,
+ * and sending them back to the scanner would silently discard it.
  *
  * label-capture branches off both scanner (no barcode in hand: `''`) and
  * result's not-found state (barcode known but unscorable) and rejoins at
@@ -19,12 +24,13 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import ScannerScreen, { type ScanOutcome } from './src/screens/ScannerScreen';
 import LabelCaptureScreen from './src/screens/LabelCaptureScreen';
 import ResultScreen from './src/screens/ResultScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 import { loadProfile } from './src/storage/profile';
 import { FONT_MAP } from './src/fonts';
 import { colors } from './src/theme';
 import type { Profile } from './src/types';
 
-type Screen = 'onboarding' | 'scanner' | 'result' | 'label-capture';
+type Screen = 'onboarding' | 'scanner' | 'result' | 'label-capture' | 'profile';
 
 export default function App() {
   // React Native has no font-weight synthesis for custom fonts — every text
@@ -40,6 +46,8 @@ export default function App() {
   // never was one (scanner's no-barcode fallback), the missed code otherwise
   // (not-found's photograph-the-label action).
   const [labelCaptureBarcode, setLabelCaptureBarcode] = useState('');
+  /** Where "Back" from the profile screen should land. */
+  const [profileReturn, setProfileReturn] = useState<Screen>('scanner');
 
   useEffect(() => {
     let cancelled = false;
@@ -58,8 +66,11 @@ export default function App() {
 
   const handleProfileSaved = useCallback((p: Profile) => {
     setProfile(p);
-    setScreen('scanner');
-  }, []);
+    // Editing an existing profile returns to the profile screen so the changed
+    // budgets are visible immediately — the whole reason to have edited it.
+    // First-time onboarding has no profile screen to go back to.
+    setScreen((current) => (current === 'onboarding' && profile ? 'profile' : 'scanner'));
+  }, [profile]);
 
   const handleScanned = useCallback((result: ScanOutcome) => {
     setOutcome(result);
@@ -71,8 +82,9 @@ export default function App() {
     setScreen('scanner');
   }, []);
 
-  const handleEditProfile = useCallback(() => {
-    setScreen('onboarding');
+  const handleOpenProfile = useCallback((from: Screen) => {
+    setProfileReturn(from);
+    setScreen('profile');
   }, []);
 
   const handlePhotographLabel = useCallback((barcode: string) => {
@@ -106,14 +118,14 @@ export default function App() {
         <OnboardingScreen
           initialProfile={profile}
           onSaved={handleProfileSaved}
-          onCancel={profile ? () => setScreen('scanner') : undefined}
+          onCancel={profile ? () => setScreen('profile') : undefined}
         />
       )}
       {screen === 'scanner' && profile && (
         <ScannerScreen
           profile={profile}
           onScanned={handleScanned}
-          onEditProfile={handleEditProfile}
+          onOpenProfile={() => handleOpenProfile('scanner')}
           onPhotographLabel={handlePhotographLabel}
         />
       )}
@@ -123,6 +135,14 @@ export default function App() {
           profile={profile}
           onScanAnother={handleScanAnother}
           onPhotographLabel={handlePhotographLabel}
+          onOpenProfile={() => handleOpenProfile('result')}
+        />
+      )}
+      {screen === 'profile' && profile && (
+        <ProfileScreen
+          profile={profile}
+          onEdit={() => setScreen('onboarding')}
+          onBack={() => setScreen(profileReturn)}
         />
       )}
       {screen === 'label-capture' && profile && (

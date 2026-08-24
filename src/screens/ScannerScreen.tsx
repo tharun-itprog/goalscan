@@ -26,7 +26,7 @@ import SecondaryButton from '../components/SecondaryButton';
 import { isScorable, lookupBarcode } from '../api/openfoodfacts';
 import { evaluateProduct } from '../scan/evaluate';
 import { colors, radii, spacing, type } from '../theme';
-import type { Profile, ScanResult } from '../types';
+import type { Goal, Profile, ScanResult } from '../types';
 
 export type ScanOutcome =
   | ({ kind: 'success' } & ScanResult)
@@ -43,7 +43,7 @@ export type ScanOutcome =
 interface Props {
   profile: Profile;
   onScanned: (outcome: ScanOutcome) => void;
-  onEditProfile: () => void;
+  onOpenProfile: () => void;
   onPhotographLabel: (barcode: string) => void;
 }
 
@@ -52,7 +52,7 @@ interface Props {
 // keeps this compiling instead of only looking right.
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const;
 
-export default function ScannerScreen({ profile, onScanned, onEditProfile, onPhotographLabel }: Props) {
+export default function ScannerScreen({ profile, onScanned, onOpenProfile, onPhotographLabel }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [loading, setLoading] = useState(false);
   // Guards against onBarcodeScanned firing repeatedly for the same code while
@@ -146,8 +146,21 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile, onPho
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
           <View />
-          <Pressable style={styles.editButton} onPress={onEditProfile} hitSlop={8}>
-            <Text style={styles.editButtonText}>Edit profile</Text>
+          {/* Names the goal rather than the action. Every verdict this screen
+              produces is relative to it, so it belongs on screen — and a
+              person who wants to change it looks for what it says now, not
+              for the word "edit". The generous hitSlop is deliberate: the
+              visible pill stays light over a live camera feed, but the touch
+              target still clears the design system's 48pt minimum. */}
+          <Pressable
+            style={({ pressed }) => [styles.goalPill, pressed && { opacity: 0.7 }]}
+            onPress={onOpenProfile}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={`Goal: ${GOAL_LABEL[profile.goal]}. Open your profile.`}
+          >
+            <Text style={styles.goalPillText}>{GOAL_LABEL[profile.goal]}</Text>
+            <Text style={styles.goalPillChevron}>›</Text>
           </Pressable>
         </View>
 
@@ -185,6 +198,13 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile, onPho
   );
 }
 
+/** Short enough for a camera-overlay pill; the profile screen spells it out. */
+const GOAL_LABEL: Record<Goal, string> = {
+  lose_fat: 'Losing fat',
+  maintain: 'Maintaining',
+  gain_muscle: 'Gaining muscle',
+};
+
 const RETICLE_SIZE = 260;
 
 const styles = StyleSheet.create({
@@ -200,15 +220,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  editButton: {
+  goalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.dark.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.dark.border,
   },
-  editButtonText: { ...type.small, color: colors.dark.text },
+  goalPillText: { ...type.small, color: colors.dark.text },
+  goalPillChevron: { ...type.small, color: colors.dark.muted, marginLeft: spacing.sm },
   centerWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
   reticle: {
     width: RETICLE_SIZE,

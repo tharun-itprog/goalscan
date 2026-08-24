@@ -138,7 +138,7 @@ Contrast is a test (`scripts/verify-contrast.ts`), not a judgement call. It has 
 
 ## Status
 
-Built and tested: scoring engine with headline reasons, profile targets, goal-fit verdicts, Open Food Facts client, layered serving-size resolution with a user-editable basis, the full label-scan path from camera to score, and the app UI.
+Built and tested: scoring engine with headline reasons, profile targets, goal-fit verdicts, Open Food Facts client, layered serving-size resolution with a user-editable basis, the full label-scan path from camera to score, and the app UI including a profile screen that shows the daily budgets every percentage is measured against.
 
 Not yet built: swap suggestions ("here's a better option"), and manual entry as a third fallback.
 

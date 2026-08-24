@@ -37,9 +37,12 @@ interface Props {
   profile: Profile;
   onScanAnother: () => void;
   onPhotographLabel: (barcode: string) => void;
+  onOpenProfile: () => void;
 }
 
-export default function ResultScreen({ outcome, profile, onScanAnother, onPhotographLabel }: Props) {
+export default function ResultScreen({
+  outcome, profile, onScanAnother, onPhotographLabel, onOpenProfile,
+}: Props) {
   if (outcome.kind === 'not_found') {
     return (
       <NotFoundScreen
@@ -51,7 +54,14 @@ export default function ResultScreen({ outcome, profile, onScanAnother, onPhotog
   if (outcome.kind === 'error') {
     return <ErrorScreen message={outcome.message} onRetry={onScanAnother} />;
   }
-  return <SuccessScreen outcome={outcome} profile={profile} onScanAnother={onScanAnother} />;
+  return (
+    <SuccessScreen
+      outcome={outcome}
+      profile={profile}
+      onScanAnother={onScanAnother}
+      onOpenProfile={onOpenProfile}
+    />
+  );
 }
 
 const GOAL_CONTEXT: Record<Goal, string> = {
@@ -99,10 +109,12 @@ function SuccessScreen({
   outcome,
   profile,
   onScanAnother,
+  onOpenProfile,
 }: {
   outcome: Extract<ScanOutcome, { kind: 'success' }>;
   profile: Profile;
   onScanAnother: () => void;
+  onOpenProfile: () => void;
 }) {
   const [showBreakdown, setShowBreakdown] = useState(false);
 
@@ -127,18 +139,20 @@ function SuccessScreen({
   }, [outcome.product.barcode]);
 
   /**
-   * Re-running the whole evaluation on an override — rather than rescaling the
-   * percentages in place — keeps one code path. The health score is computed
-   * per 100 g and doesn't move; goal fit does, including which finding leads
-   * the headline, which is exactly what should change when the amount changes.
+   * Always re-evaluated here rather than reusing what the scanner computed.
+   *
+   * Two things can change while this screen is open — the serving size, and
+   * the profile, since the daily-budget link leads to an editable profile and
+   * comes back here. Recomputing unconditionally means the screen can't show
+   * a verdict from a profile the user has since changed. Evaluation is pure
+   * and cheap, so there's nothing to save by being clever about it.
    */
   const { product, health, goalFit } = useMemo(() => {
-    if (override === null) return outcome;
-    return evaluateProduct(
-      { ...outcome.product, servingSizeG: override, servingSource: 'user' },
-      profile,
-    );
-  }, [outcome, override, profile]);
+    const base = override === null
+      ? outcome.product
+      : { ...outcome.product, servingSizeG: override, servingSource: 'user' as const };
+    return evaluateProduct(base, profile);
+  }, [outcome.product, override, profile]);
 
   const applyServing = useCallback(
     (grams: number) => {
@@ -213,6 +227,19 @@ function SuccessScreen({
           onChange={applyServing}
         />
 
+        {/* The percentages above are fractions of budgets the user has never
+            seen. This is the way to check the denominator, the same way the
+            score card is the way to check the score. */}
+        <Pressable
+          onPress={onOpenProfile}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.budgetLink, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.budgetLinkText}>
+            Measured against your daily budget{'  '}›
+          </Text>
+        </Pressable>
+
         <View style={styles.actions}>
           <PrimaryButton label="Scan another" onPress={onScanAnother} />
         </View>
@@ -278,6 +305,8 @@ const styles = StyleSheet.create({
   sectionLabel: { ...type.label, color: colors.muted, marginBottom: spacing.sm },
   bulletList: { marginBottom: spacing.lg },
   bullet: { ...type.body, color: colors.text, marginBottom: spacing.sm, lineHeight: 22 },
+  budgetLink: { minHeight: HIT_TARGET, justifyContent: 'center', marginBottom: spacing.sm },
+  budgetLinkText: { ...type.small, color: colors.accent },
   actions: { marginBottom: spacing.lg },
   attribution: { ...type.small, color: colors.muted, textAlign: 'center' },
   errorWrap: { flex: 1, padding: spacing.lg, justifyContent: 'center' },
