@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #F7F6F3; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1C1C1A; }
+    a { color: #D9480F; } a:hover { color: #A33A0C; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F7F6F3; display: flex; flex-direction: column; padding: 56px 24px 28px; box-sizing: border-box;">
+
+  <div style="font-family: 'Architects Daughter', cursive; font-size: 13px; color: #86837C; margin-bottom: 22px;">breakdown &middot; the arithmetic, checkable</div>
+
+  <div style="font-size: 22px; font-weight: 600; margin-bottom: 6px;">Why 43?</div>
+  <div style="font-size: 14px; color: #86837C; line-height: 1.45; margin-bottom: 26px; text-wrap: pretty;">Penalties subtract, bonuses add. Nutrition is worth 60 of the 100.</div>
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid #1C1C1A; margin-bottom: 4px;">
+    <div style="font-size: 11px; letter-spacing: 1.2px; color: #86837C;">NUTRITION</div>
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500;">17/60</div>
+  </div>
+
+  <sc-for list="{{rows}}" as="row" hint-placeholder-count="7">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid #E3E1DC; gap: 12px;">
+      <div style="font-size: 15px; flex-grow: 1;">{{row.label}}</div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #86837C; width: 76px; text-align: right;">{{row.amount}}</div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: {{row.color}}; width: 54px; text-align: right;">{{row.points}}</div>
+    </div>
+  </sc-for>
+
+  <div style="display: flex; gap: 9px; align-items: flex-start; background: #EDEBE6; border-radius: 4px; padding: 13px 14px; margin-top: 14px;">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#86837C" stroke-width="2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+    <div style="font-size: 13px; line-height: 1.45; color: #4A4843; text-wrap: pretty;">Protein earns nothing here. Products this heavily penalised can&#39;t redeem themselves on protein alone.</div>
+  </div>
+
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0 13px; border-bottom: 1px solid #E3E1DC; margin-top: 16px;">
+    <div style="font-size: 15px;">Processing</div>
+    <div style="display: flex; gap: 12px; align-items: baseline;">
+      <span style="font-size: 13px; color: #86837C;">Ultra-processed</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: #C92A2A; width: 54px; text-align: right;">0/10</span>
+    </div>
+  </div>
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 13px 0;">
+    <div style="font-size: 15px;">Additives</div>
+    <div style="display: flex; gap: 12px; align-items: baseline;">
+      <span style="font-size: 13px; color: #86837C;">E471 flagged</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; width: 54px; text-align: right;">26/30</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    const P = '#C92A2A', B = '#2B8A3E', N = '#86837C';
+    return {
+      rows: [
+        { label: 'Saturated fat', amount: '12.5 g',   points: '−10', color: P },
+        { label: 'Sugars',        amount: '34 g',     points: '−7',  color: P },
+        { label: 'Energy',        amount: '495 kcal', points: '−6',  color: P },
+        { label: 'Sodium',        amount: '360 mg',   points: '−3',  color: P },
+        { label: 'Fiber',         amount: '2.8 g',    points: '+2',       color: B },
+        { label: 'Protein',       amount: '6.2 g',    points: '0',        color: N },
+        { label: 'Fruit & veg',   amount: 'not listed', points: '0',      color: N },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

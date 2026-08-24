@@ -1,0 +1,64 @@
+{
+  "pages": [
+    { "id": "chosen", "name": "Chosen — C refined" },
+    { "id": "decide", "name": "Directions (decided)" },
+    { "id": "flow", "name": "The rest of the flow" }
+  ],
+  "artboards": [
+    { "file": "ResultChosen.dc.html", "page": "chosen", "x": 0, "y": 0, "w": 390, "h": 844, "title": "Result — chosen" },
+
+    { "file": "Main.dc.html",       "page": "decide", "x": 0,    "y": 0, "w": 390, "h": 844, "title": "A · Verdict first" },
+    { "file": "DirectionB.dc.html", "page": "decide", "x": 470,  "y": 0, "w": 390, "h": 844, "title": "B · Score first" },
+    { "file": "DirectionC.dc.html", "page": "decide", "x": 940,  "y": 0, "w": 390, "h": 844, "title": "C · Reason first ✓" },
+
+    { "file": "Onboarding.dc.html", "page": "flow", "x": 0,    "y": 0, "w": 390, "h": 844 },
+    { "file": "Scanner.dc.html",    "page": "flow", "x": 470,  "y": 0, "w": 390, "h": 844 },
+    { "file": "NotFound.dc.html",   "page": "flow", "x": 940,  "y": 0, "w": 390, "h": 844 },
+    { "file": "Breakdown.dc.html",  "page": "flow", "x": 1410, "y": 0, "w": 390, "h": 844 }
+  ],
+  "annotations": [
+    {
+      "id": "chosen-brief",
+      "page": "chosen",
+      "x": 470, "y": 0, "w": 400,
+      "text": "C, refined.\n\nThe score is now a ROW, not a hero — readable at a glance, comparable between products, and it doubles as the way into the breakdown. The three little bars are nutrition / additives / processing, so the row hints at the detail behind it.\n\nThe verdict moved ABOVE the headline as a small coloured label. Colour registers before you read a word, so you still get the instant yes/no that direction A was built around — without a giant SKIP shouting at you.\n\nFlip the tweak above the artboard to see a product that passes. Every earlier wireframe showed a bad result, which made the whole thing read as a scold."
+    },
+    {
+      "id": "chosen-todo",
+      "page": "chosen",
+      "x": 470, "y": 380, "w": 400,
+      "text": "ONE REAL CONSEQUENCE\n\nThe engine writes reasons as list fragments: \"11 g sugar — 22% of your daily cap\". That reads fine as a bullet and badly as a 31px headline.\n\nPicking C means the scoring engine needs to emit a headline form of its lead reason — a full sentence with the number in it. That's engine work, not styling, and it isn't built yet."
+    },
+    {
+      "id": "decide-done",
+      "page": "decide",
+      "x": 0, "y": -190, "w": 420,
+      "text": "Decided: C. Kept here as the record of what was compared and why — the tradeoffs under each still stand, including the ones against C."
+    },
+    {
+      "id": "opt-a",
+      "page": "decide",
+      "x": 0, "y": 900, "w": 390,
+      "text": "A · VERDICT FIRST\n\nFor: you're standing in an aisle deciding yes or no. The word answers that in one glance, before you read anything.\n\nAgainst: demotes the score to a row, so you lose the at-a-glance \"how good is this\" people already know from Yuka. A giant SKIP can also read as preachy."
+    },
+    {
+      "id": "opt-b",
+      "page": "decide",
+      "x": 470, "y": 900, "w": 390,
+      "text": "B · SCORE FIRST\n\nFor: instantly familiar — anyone who has used Yuka reads it without learning anything. The number is comparable across products, which the other two aren't.\n\nAgainst: the score answers \"is this good\", not \"should I buy it\". The thing you actually came for sits below three bars of data."
+    },
+    {
+      "id": "opt-c",
+      "page": "decide",
+      "x": 940, "y": 900, "w": 390,
+      "text": "C · REASON FIRST — CHOSEN\n\nFor: the reason is what changes behaviour. A number is forgettable; \"22% of your daily cap\" is not. This is the one thing no competitor does.\n\nAgainst (still true): harder to compare two products on a shelf, and it stakes the whole screen on the engine picking the right lead reason. The score row on the chosen page is the answer to the first half; the second half is still a risk."
+    },
+    {
+      "id": "flow-note",
+      "page": "flow",
+      "x": 0, "y": -190, "w": 420,
+      "text": "These four are less contentious, so they're drawn once rather than three ways.\n\nTwo real changes from what's built: onboarding is one question per screen instead of a wall of fields, and \"not found\" leads with photographing the label rather than apologising."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "chosen" }
+}

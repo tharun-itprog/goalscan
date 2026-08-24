@@ -140,5 +140,72 @@ console.log('\nMissing serving size is disclosed, not hidden');
   console.log(`  ${disclosed ? 'PASS' : 'FAIL'}  user is told the serving was assumed`);
 }
 
+
+console.log('\nHeadlines read as sentences, not fragments');
+{
+  const biscuit = product({
+    name: 'Biscuits', servingSizeG: 33, novaGroup: 4,
+    nutriments: { ...EMPTY, energyKcal: 495, proteins: 6.2, carbohydrates: 62, sugars: 34, fat: 24, saturatedFat: 12.5, fiber: 2.8, salt: 0.9 },
+  });
+  const fit = computeGoalFit(biscuit, targets, 'lose_fat');
+  check('headline ends as a sentence', fit.headline.endsWith('.'), true);
+  check('headline names the serving basis', fit.headline.includes('33 g serving'), true);
+  check('list form stays a fragment', fit.reasons[0].endsWith('.'), false);
+  console.log(`  headline: ${fit.headline}`);
+  console.log(`  list row: ${fit.reasons[0]}`);
+}
+
+console.log('\nHeadline is picked by magnitude, not by list order');
+{
+  // Sugar is checked BEFORE saturated fat in the source. Here saturated fat is
+  // the bigger overshoot (65% of its cap vs sugar's 38%), so it must win --
+  // this is the exact bug the magnitude ranking exists to prevent.
+  const p = product({
+    servingSizeG: 100,
+    nutriments: { ...EMPTY, energyKcal: 300, proteins: 5, carbohydrates: 40, sugars: 20, fat: 20, saturatedFat: 15, fiber: 1, salt: 0.2 },
+  });
+  const fit = computeGoalFit(p, targets, 'lose_fat');
+  check('bigger overshoot leads', fit.headline.includes('saturated fat'), true);
+  check('list agrees with the headline', fit.reasons[0].includes('saturated fat'), true);
+  console.log(`  headline: ${fit.headline}`);
+}
+
+console.log('\nAn assumed serving size is never dressed up as a real one');
+{
+  const p = product({
+    servingSizeG: null,
+    nutriments: { ...EMPTY, energyKcal: 500, proteins: 5, carbohydrates: 60, sugars: 40, fat: 25, saturatedFat: 10, fiber: 2, salt: 1 },
+  });
+  const fit = computeGoalFit(p, targets, 'lose_fat');
+  check('says per 100 g', fit.headline.includes('per 100 g'), true);
+  check('does not claim a serving', fit.headline.includes('serving'), false);
+
+  const drink = product({
+    servingSizeG: 330, isBeverage: true,
+    nutriments: { ...EMPTY, energyKcal: 42, proteins: 0, carbohydrates: 11, sugars: 10.6, fat: 0, saturatedFat: 0, fiber: 0, salt: 0 },
+  });
+  check('beverages measure in ml', computeGoalFit(drink, targets, 'lose_fat').headline.includes('ml serving'), true);
+}
+
+console.log('\nA product that passes gets a headline too');
+{
+  const yogurt = product({
+    name: 'Greek yogurt', servingSizeG: 170, novaGroup: 1,
+    nutriments: { ...EMPTY, energyKcal: 57, proteins: 10.3, carbohydrates: 3.6, sugars: 3.6, fat: 0.4, saturatedFat: 0.1, fiber: 0, salt: 0.1 },
+  });
+  const fit = computeGoalFit(yogurt, targets, 'lose_fat');
+  check('verdict', fit.verdict, 'fits');
+  check('headline is a sentence', fit.headline.endsWith('.'), true);
+  console.log(`  headline: ${fit.headline}`);
+
+  // Nothing notable at all still needs something to put in the slot.
+  const water = product({
+    isBeverage: true, servingSizeG: 500,
+    nutriments: { ...EMPTY, energyKcal: 0, proteins: 0, carbohydrates: 0, sugars: 0, fat: 0, saturatedFat: 0, fiber: 0, salt: 0 },
+  });
+  const plain = computeGoalFit(water, targets, 'lose_fat');
+  check('quiet products fall back cleanly', plain.headline, 'Nothing here works against your goal.');
+}
+
 console.log(`\n${failures === 0 ? 'All checks passed.' : `${failures} check(s) FAILED.`}`);
 process.exit(failures === 0 ? 0 : 1);

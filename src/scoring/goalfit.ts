@@ -8,6 +8,10 @@
  * Output is a verdict plus *reasons with numbers in them*. Reasons build trust;
  * a bare second number just invites arguing. Like the health score, this is
  * pure and deterministic — no model in the loop.
+ *
+ * Every finding is written twice: a short `text` fragment for list rows, and a
+ * complete-sentence `headline` for the result screen's largest line. They are
+ * generated together so the two can never drift apart.
  */
 
 import type {
@@ -43,7 +47,17 @@ const PROTEIN_DENSITY_GOOD = 10;
 
 interface Signal {
   severity: 'hard' | 'caution' | 'positive';
+  /**
+   * How far past its own threshold this signal sits, as a multiple. Lets us
+   * compare a sugar overshoot against a sodium one on the same scale — without
+   * it, "most important" degrades into "first in the list", and the headline
+   * would be decided by the order these checks happen to be written in.
+   */
+  magnitude: number;
+  /** Short fragment, for list rows. */
   text: string;
+  /** Complete sentence with the number in it, for the headline slot. */
+  headline: string;
 }
 
 const pct = (fraction: number) => Math.round(fraction * 100);
@@ -61,15 +75,27 @@ export function computeGoalFit(
   const servingSizeG = product.servingSizeG ?? DEFAULT_SERVING_G;
   const scale = servingSizeG / 100;
 
+  /**
+   * How a headline refers to the amount it just quoted.
+   *
+   * When the serving size was assumed, the figures are literally per-100g, so
+   * saying "in a serving" would be a claim we haven't earned — the honest
+   * phrasing is the one that names the basis.
+   */
+  const unit = product.isBeverage ? 'ml' : 'g';
+  const per = servingWasEstimated
+    ? `per 100 ${unit}`
+    : `in a ${g(servingSizeG)} ${unit} serving`;
+
   const n = product.nutriments;
   /** Scale a per-100g value to this serving. Null stays null. */
-  const per = (v: number | null): number | null => (v === null ? null : v * scale);
+  const scaled = (v: number | null): number | null => (v === null ? null : v * scale);
 
-  const kcal = per(n.energyKcal);
-  const protein = per(n.proteins);
-  const sugar = per(n.sugars);
-  const satFat = per(n.saturatedFat);
-  const fiber = per(n.fiber);
+  const kcal = scaled(n.energyKcal);
+  const protein = scaled(n.proteins);
+  const sugar = scaled(n.sugars);
+  const satFat = scaled(n.saturatedFat);
+  const fiber = scaled(n.fiber);
   // Salt grams -> sodium mg.
   const sodiumMg = n.salt === null ? null : n.salt * 400 * scale;
 
@@ -84,66 +110,48 @@ export function computeGoalFit(
 
   const signals: Signal[] = [];
 
-  // --- Negative signals -----------------------------------------------------
+  /** Add a penalty signal if the contribution crosses either threshold. */
+  function penalty(
+    value: number | null,
+    fraction: number,
+    limit: { caution: number; hard: number },
+    amount: string,
+    noun: string,
+    capName: string,
+  ) {
+    if (value === null) return;
+    if (fraction < limit.caution) return;
 
-  if (sugar !== null) {
-    const c = contribution.sugar;
-    if (c >= LIMIT.sugar.hard) {
-      signals.push({
-        severity: 'hard',
-        text: `${g(sugar)} g sugar — ${pct(c)}% of your daily cap in one serving`,
-      });
-    } else if (c >= LIMIT.sugar.caution) {
-      signals.push({
-        severity: 'caution',
-        text: `${g(sugar)} g sugar — ${pct(c)}% of your daily cap`,
-      });
-    }
+    const hard = fraction >= limit.hard;
+    signals.push({
+      severity: hard ? 'hard' : 'caution',
+      magnitude: fraction / limit.hard,
+      text: `${amount} ${noun} — ${pct(fraction)}% of your daily ${capName}`,
+      headline: `${amount} of ${noun} ${per} — ${pct(fraction)}% of your daily ${capName}.`,
+    });
   }
 
-  if (sodiumMg !== null) {
-    const c = contribution.sodium;
-    if (c >= LIMIT.sodium.hard) {
-      signals.push({
-        severity: 'hard',
-        text: `${Math.round(sodiumMg)} mg sodium — ${pct(c)}% of your daily cap in one serving`,
-      });
-    } else if (c >= LIMIT.sodium.caution) {
-      signals.push({
-        severity: 'caution',
-        text: `${Math.round(sodiumMg)} mg sodium — ${pct(c)}% of your daily cap`,
-      });
-    }
-  }
-
-  if (satFat !== null) {
-    const c = contribution.saturatedFat;
-    if (c >= LIMIT.saturatedFat.hard) {
-      signals.push({
-        severity: 'hard',
-        text: `${g(satFat)} g saturated fat — ${pct(c)}% of your daily cap`,
-      });
-    } else if (c >= LIMIT.saturatedFat.caution) {
-      signals.push({
-        severity: 'caution',
-        text: `${g(satFat)} g saturated fat — ${pct(c)}% of your daily cap`,
-      });
-    }
-  }
+  penalty(sugar, contribution.sugar, LIMIT.sugar, `${g(sugar ?? 0)} g`, 'sugar', 'cap');
+  penalty(
+    sodiumMg, contribution.sodium, LIMIT.sodium,
+    `${Math.round(sodiumMg ?? 0)} mg`, 'sodium', 'limit',
+  );
+  penalty(
+    satFat, contribution.saturatedFat, LIMIT.saturatedFat,
+    `${g(satFat ?? 0)} g`, 'saturated fat', 'cap',
+  );
 
   // Calorie density only counts against a cutting goal. On a gaining goal a
   // calorie-dense food is the point, so flagging it would be actively wrong.
   if (kcal !== null && goal === 'lose_fat') {
-    const c = contribution.calories;
-    if (c >= LIMIT.calories.hard) {
+    const f = contribution.calories;
+    if (f >= LIMIT.calories.caution) {
+      const hard = f >= LIMIT.calories.hard;
       signals.push({
-        severity: 'hard',
-        text: `${Math.round(kcal)} kcal — ${pct(c)}% of your daily intake for one serving`,
-      });
-    } else if (c >= LIMIT.calories.caution) {
-      signals.push({
-        severity: 'caution',
-        text: `${Math.round(kcal)} kcal — ${pct(c)}% of your daily intake`,
+        severity: hard ? 'hard' : 'caution',
+        magnitude: f / LIMIT.calories.hard,
+        text: `${Math.round(kcal)} kcal — ${pct(f)}% of your daily intake`,
+        headline: `${Math.round(kcal)} calories ${per} — ${pct(f)}% of everything you eat today.`,
       });
     }
   }
@@ -153,7 +161,9 @@ export function computeGoalFit(
   if (protein !== null && contribution.protein >= GOOD_CONTRIBUTION) {
     signals.push({
       severity: 'positive',
+      magnitude: contribution.protein / GOOD_CONTRIBUTION,
       text: `${g(protein)} g protein — ${pct(contribution.protein)}% of your daily target`,
+      headline: `${g(protein)} g of protein ${per} — ${pct(contribution.protein)}% of your daily target.`,
     });
   }
 
@@ -162,7 +172,9 @@ export function computeGoalFit(
     if (density >= PROTEIN_DENSITY_GOOD) {
       signals.push({
         severity: 'positive',
+        magnitude: density / PROTEIN_DENSITY_GOOD,
         text: `Protein-dense — ${g(density)} g protein per 100 kcal`,
+        headline: `${g(density)} g of protein for every 100 calories — unusually dense.`,
       });
     }
   }
@@ -170,15 +182,18 @@ export function computeGoalFit(
   if (fiber !== null && contribution.fiber >= GOOD_CONTRIBUTION) {
     signals.push({
       severity: 'positive',
+      magnitude: contribution.fiber / GOOD_CONTRIBUTION,
       text: `${g(fiber)} g fiber — ${pct(contribution.fiber)}% of your daily target`,
+      headline: `${g(fiber)} g of fiber ${per} — ${pct(contribution.fiber)}% of your daily target.`,
     });
   }
 
   // --- Verdict --------------------------------------------------------------
 
-  const hard = signals.filter((s) => s.severity === 'hard');
-  const caution = signals.filter((s) => s.severity === 'caution');
-  const positive = signals.filter((s) => s.severity === 'positive');
+  const bySeverity = (s: Signal['severity']) => signals.filter((x) => x.severity === s);
+  const hard = bySeverity('hard');
+  const caution = bySeverity('caution');
+  const positive = bySeverity('positive');
 
   let verdict: Verdict;
   if (hard.length > 0) {
@@ -195,20 +210,44 @@ export function computeGoalFit(
     verdict = 'fits';
   }
 
-  const reasons = [...hard, ...caution, ...positive].map((s) => s.text);
+  /**
+   * The headline is the biggest thing on the result screen, so it is picked by
+   * MAGNITUDE within the worst severity present — not by list order. Otherwise
+   * saturated fat at 46% of its cap could outrank sugar at 108% purely because
+   * of the order these checks run in.
+   */
+  const worstTier = hard.length ? hard : caution.length ? caution : positive;
+  const lead = worstTier.reduce<Signal | null>(
+    (best, s) => (best === null || s.magnitude > best.magnitude ? s : best),
+    null,
+  );
 
+  const headline = lead
+    ? lead.headline
+    : 'Nothing here works against your goal.';
+
+  // Ranked the same way, so the list agrees with the headline about what
+  // matters most rather than telling a slightly different story.
+  const ranked = [
+    ...[...hard].sort((a, b) => b.magnitude - a.magnitude),
+    ...[...caution].sort((a, b) => b.magnitude - a.magnitude),
+    ...[...positive].sort((a, b) => b.magnitude - a.magnitude),
+  ];
+
+  const reasons = ranked.map((s) => s.text);
   if (reasons.length === 0) {
     reasons.push('Nothing here works against your goal');
   }
 
   if (servingWasEstimated) {
     reasons.push(
-      `No serving size on the label — figures assume ${DEFAULT_SERVING_G} g. Adjust it for an accurate read.`,
+      `No serving size on the label — figures are per 100 ${unit}. Set a serving for an accurate read.`,
     );
   }
 
   return {
     verdict,
+    headline,
     reasons,
     contribution,
     servingSizeG,

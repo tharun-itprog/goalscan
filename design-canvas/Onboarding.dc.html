@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=IBM+Plex+Sans:wght@400;600&display=swap">
+  <style>
+    body { margin: 0; background: #F7F6F3; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1C1C1A; }
+    a { color: #D9480F; } a:hover { color: #A33A0C; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F7F6F3; display: flex; flex-direction: column; padding: 56px 24px 28px; box-sizing: border-box;">
+
+  <div style="font-family: 'Architects Daughter', cursive; font-size: 13px; color: #86837C; margin-bottom: 24px;">onboarding &middot; one question per screen</div>
+
+  <div style="display: flex; gap: 5px; margin-bottom: 40px;">
+    <sc-for list="{{steps}}" as="step" hint-placeholder-count="5">
+      <div style="height: 3px; flex-grow: 1; border-radius: 2px; background: {{step.fill}};"></div>
+    </sc-for>
+  </div>
+
+  <div style="font-size: 13px; color: #86837C; margin-bottom: 8px;">Step 4 of 5</div>
+  <div style="font-size: 28px; font-weight: 600; line-height: 1.25; margin-bottom: 10px; text-wrap: pretty;">What are you working towards?</div>
+  <div style="font-size: 15px; color: #86837C; line-height: 1.45; margin-bottom: 36px; text-wrap: pretty;">This changes what counts as a good product for you &mdash; not just what counts as healthy.</div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <sc-for list="{{goals}}" as="goal" hint-placeholder-count="3">
+      <div style="border: 1px solid {{goal.border}}; background: {{goal.bg}}; border-radius: 5px; padding: 20px; min-height: 44px; display: flex; flex-direction: column; gap: 5px;">
+        <div style="font-size: 17px; font-weight: 600;">{{goal.title}}</div>
+        <div style="font-size: 13px; color: #86837C;">{{goal.detail}}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div style="background: #1C1C1A; color: #F7F6F3; text-align: center; padding: 17px; border-radius: 4px; font-size: 16px; font-weight: 600;">Continue</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      steps: [1,2,3,4,5].map((n) => ({ fill: n <= 4 ? '#1C1C1A' : '#D6D3CC' })),
+      goals: [
+        { title: 'Lose fat',      detail: 'Tighter calorie and sugar limits', border: '#C9C6BF', bg: 'transparent' },
+        { title: 'Build muscle',  detail: 'Protein weighted heavily; calories relaxed', border: '#1C1C1A', bg: '#EDEBE6' },
+        { title: 'Maintain',      detail: 'Balanced across the board', border: '#C9C6BF', bg: 'transparent' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=IBM+Plex+Sans:wght@400;600&display=swap">
+  <style>
+    body { margin: 0; background: #1C1C1A; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #F7F6F3; }
+    a { color: #FF8A50; } a:hover { color: #FFB08A; }
+  </style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #232320; display: flex; flex-direction: column; align-items: center; padding: 56px 24px 28px; box-sizing: border-box; position: relative;">
+
+  <div style="font-family: 'Architects Daughter', cursive; font-size: 13px; color: #7A7A73; align-self: flex-start;">scanner &middot; camera fills the screen</div>
+
+  <div style="flex-grow: 1; display: flex; align-items: center;">
+    <div style="width: 270px; height: 170px; border: 2px solid rgba(247,246,243,0.85); border-radius: 6px; position: relative; display: flex; align-items: center; justify-content: center;">
+      <div style="width: 100%; height: 1px; background: #D9480F;"></div>
+      <div style="position: absolute; inset: 0; box-shadow: 0 0 0 2000px rgba(20,20,18,0.55); border-radius: 6px;"></div>
+    </div>
+  </div>
+
+  <div style="font-size: 19px; font-weight: 600; margin-bottom: 8px;">Point at the barcode</div>
+  <div style="font-size: 14px; color: #A5A49C; text-align: center; line-height: 1.45; margin-bottom: 36px; max-width: 280px; text-wrap: pretty;">Hold steady &mdash; it scans on its own.</div>
+
+  <div style="border: 1px solid #4A4A44; color: #F7F6F3; text-align: center; padding: 15px 22px; border-radius: 4px; font-size: 15px; width: 100%; box-sizing: border-box;">No barcode? Photograph the label</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

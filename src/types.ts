@@ -128,6 +128,14 @@ export type Verdict = 'fits' | 'caution' | 'skip';
 
 export interface GoalFit {
   verdict: Verdict;
+  /**
+   * The single most important finding, as a complete sentence with the number
+   * in it — "11 g of sugar in a 33 g serving, 22% of your daily cap."
+   *
+   * This is the headline on the result screen, so it is chosen by magnitude
+   * within the worst severity present, not by list order. Rendered verbatim.
+   */
+  headline: string;
   /** Human-readable, ordered most-important-first. Shown directly in the UI. */
   reasons: string[];
   /** Per-serving contribution as a fraction of the daily budget (0-1+). */
