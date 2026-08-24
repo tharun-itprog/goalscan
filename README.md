@@ -142,6 +142,10 @@ Built and tested: scoring engine with headline reasons, profile targets, goal-fi
 
 Not yet built: swap suggestions ("here's a better option"), and manual entry as a third fallback.
 
+## Shipping it
+
+See [DEPLOY.md](DEPLOY.md). The short version: the proxy has to be hosted before a shipped build can scan labels at all, and nothing in the app has run on a physical device yet.
+
 ## Attribution and licensing
 
 Product data comes from [Open Food Facts](https://world.openfoodfacts.org), used under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/1-0/). The database is free to use commercially with attribution; ODbL's share-alike clause applies to redistributing a modified copy of the *database*, not to an application that queries it.

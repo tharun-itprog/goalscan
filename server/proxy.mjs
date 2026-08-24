@@ -14,12 +14,88 @@
  * from ever reaching a user.
  *
  * Run:  ANTHROPIC_API_KEY=sk-... node server/proxy.mjs
+ *
+ * DEPLOYMENT: this is the one piece that cannot stay on a laptop. A published
+ * app can't reach localhost, so this has to run somewhere public — and the
+ * moment it does, it is an unauthenticated endpoint that spends money on the
+ * operator's card. The limits below are the minimum defence: a per-IP rate
+ * limit against one abusive client, and a hard daily cap so that a determined
+ * one still can't run up an unbounded bill overnight. See DEPLOY.md.
  */
 
 import { createServer } from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
 
 const PORT = process.env.PORT ?? 8787;
+
+/**
+ * Abuse limits. Both are deliberately low by default: a real person scans a
+ * handful of labels a minute at most, and the failure mode of a limit that is
+ * slightly too tight (a retry prompt) is far cheaper than the failure mode of
+ * one that is too loose (a five-figure API bill).
+ *
+ * In-memory on purpose. It resets on redeploy and doesn't coordinate across
+ * instances, which is fine for a single small box and is NOT fine once this
+ * scales horizontally — at that point the counters belong in Redis or the
+ * limit belongs in front of the app, at the CDN.
+ */
+const RATE_LIMIT_PER_MIN = Number(process.env.RATE_LIMIT_PER_MIN ?? 8);
+const DAILY_EXTRACTION_CAP = Number(process.env.DAILY_EXTRACTION_CAP ?? 500);
+
+/** ip -> { count, windowStart } */
+const rateWindows = new Map();
+let dailyCount = 0;
+let dailyDate = new Date().toISOString().slice(0, 10);
+
+/**
+ * Only trusted when TRUST_PROXY is set, because X-Forwarded-For is a
+ * client-supplied header: taking it at face value on a directly-exposed
+ * server lets anyone reset their own rate limit by inventing an IP. Platforms
+ * that terminate TLS for you (Fly, Render, Railway, Cloudflare) overwrite it,
+ * which is what makes it trustworthy there and only there.
+ */
+function clientIp(req) {
+  if (process.env.TRUST_PROXY === '1') {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.length > 0) {
+      return forwarded.split(',')[0].trim();
+    }
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
+/** Returns an error string when the request should be refused, else null. */
+function checkLimits(ip) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== dailyDate) {
+    dailyDate = today;
+    dailyCount = 0;
+  }
+  if (dailyCount >= DAILY_EXTRACTION_CAP) {
+    return 'Label scanning is at its daily limit. Try again tomorrow.';
+  }
+
+  const now = Date.now();
+  const window = rateWindows.get(ip);
+  if (window === undefined || now - window.windowStart >= 60_000) {
+    rateWindows.set(ip, { count: 1, windowStart: now });
+    return null;
+  }
+  if (window.count >= RATE_LIMIT_PER_MIN) {
+    return 'Too many label scans in a row. Wait a minute and try again.';
+  }
+  window.count++;
+  return null;
+}
+
+// Unbounded Maps are a memory leak with a long enough uptime. Expired windows
+// carry no information, so dropping them costs nothing.
+setInterval(() => {
+  const cutoff = Date.now() - 60_000;
+  for (const [ip, w] of rateWindows) {
+    if (w.windowStart < cutoff) rateWindows.delete(ip);
+  }
+}, 60_000).unref();
 
 /**
  * Haiku 4.5 — chosen for cost. Transcribing a printed panel is mechanical
@@ -100,6 +176,17 @@ Rules, in priority order:
 
 5. additiveCodes should list only E-numbers actually printed in the ingredients, formatted like "E471".`;
 
+/**
+ * An error whose message is safe to show a user.
+ *
+ * Everything else gets a generic reply. The distinction matters: the SDK's
+ * error messages are the raw upstream response body, so passing `err.message`
+ * through sends Anthropic's internals — a 401's full JSON among them — to
+ * anyone who can POST here. Failing that way is silent, which is why the class
+ * exists rather than a rule to remember.
+ */
+class ClientSafeError extends Error {}
+
 function json(res, status, body) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -143,10 +230,10 @@ async function extract(imageBase64, mediaType) {
   // Structured outputs can still stop early or be refused — check before
   // parsing, or a truncated response becomes a confusing JSON error.
   if (response.stop_reason === 'refusal') {
-    throw new Error('Request was declined by safety classifiers');
+    throw new ClientSafeError("That photo couldn't be processed. Try a photo of just the nutrition panel.");
   }
   if (response.stop_reason === 'max_tokens') {
-    throw new Error('Response truncated before the panel was fully transcribed');
+    throw new ClientSafeError('That label was too long to read in one go. Try framing just the panel.');
   }
 
   const textBlock = response.content.find((b) => b.type === 'text');
@@ -157,11 +244,18 @@ async function extract(imageBase64, mediaType) {
 
 const server = createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
+    // No key, no counts, no client detail — health checks are public.
     return json(res, 200, { ok: true, model: MODEL });
   }
 
   if (req.method !== 'POST' || req.url !== '/extract') {
     return json(res, 404, { error: 'Not found' });
+  }
+
+  const limitError = checkLimits(clientIp(req));
+  if (limitError) {
+    console.warn(`[extract] refused: ${limitError}`);
+    return json(res, 429, { error: limitError });
   }
 
   try {
@@ -177,16 +271,20 @@ const server = createServer(async (req, res) => {
     }
 
     const { data, usage } = await extract(imageBase64, mediaType);
+    dailyCount++;
     console.log(
       `[extract] readable=${data.readable} basis=${data.basis} ` +
-        `in=${usage.input_tokens} out=${usage.output_tokens}`,
+        `in=${usage.input_tokens} out=${usage.output_tokens} ` +
+        `daily=${dailyCount}/${DAILY_EXTRACTION_CAP}`,
     );
     return json(res, 200, data);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Extraction failed';
-    console.error('[extract] error:', message);
-    // Deliberately generic to the client — never leak key or internal detail.
-    return json(res, 502, { error: message });
+    // Full detail to the operator's log; only vetted text to the client.
+    console.error('[extract] error:', err instanceof Error ? err.message : err);
+    const safe = err instanceof ClientSafeError
+      ? err.message
+      : "Couldn't read that label right now. Try again in a moment.";
+    return json(res, 502, { error: safe });
   }
 });
 
@@ -196,6 +294,11 @@ if (!process.env.ANTHROPIC_API_KEY) {
 }
 
 server.listen(PORT, () => {
-  console.log(`Label-scan proxy on http://localhost:${PORT} (model: ${MODEL})`);
-  console.log('Point the app at this host. On a phone, use your machine\'s LAN IP, not localhost.');
+  console.log(`Label-scan proxy on port ${PORT} (model: ${MODEL})`);
+  console.log(`Limits: ${RATE_LIMIT_PER_MIN}/min per IP, ${DAILY_EXTRACTION_CAP}/day total.`);
+  if (process.env.TRUST_PROXY !== '1') {
+    console.log('TRUST_PROXY is off — rate limiting by socket address.');
+    console.log('Set TRUST_PROXY=1 only when running behind a TLS terminator.');
+  }
+  console.log('On a phone in development, point the app at this machine\'s LAN IP, not localhost.');
 });

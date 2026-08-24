@@ -1,0 +1,27 @@
+{
+  "cli": { "version": ">= 5.0.0", "appVersionSource": "local" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_LABEL_SCAN_URL": "http://192.168.1.42:8787"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_LABEL_SCAN_URL": "https://goalscan-proxy.example.com"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_LABEL_SCAN_URL": "https://goalscan-proxy.example.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

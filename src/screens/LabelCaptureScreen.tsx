@@ -293,6 +293,12 @@ export default function LabelCaptureScreen({ barcode, profile, onScanned, onCanc
           <View style={styles.guide} />
           <Text style={styles.title}>Fill the frame with the nutrition label</Text>
           <Text style={styles.hint}>Hold steady in good light for a clean read.</Text>
+          {/* Said before the photo is taken, not buried in a policy. This is
+              the only point in the app where anything leaves the device, so
+              it's the only point where it needs saying. */}
+          <Text style={styles.privacyNote}>
+            The photo is sent off your phone to be read, and isn't saved by GoalScan.
+          </Text>
         </View>
 
         <View style={styles.bottomBar}>
@@ -347,6 +353,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: { ...type.h2, color: colors.dark.text, textAlign: 'center' },
+  privacyNote: {
+    ...type.small,
+    color: colors.dark.muted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
   hint: { ...type.small, color: colors.dark.muted, textAlign: 'center', marginTop: spacing.xs },
   bottomBar: {
     minHeight: spacing.xxl * 2,

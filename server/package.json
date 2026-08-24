@@ -1,0 +1,16 @@
+{
+  "name": "goalscan-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Label-scan proxy. Holds the Anthropic API key so the app never has to.",
+  "main": "proxy.mjs",
+  "scripts": {
+    "start": "node proxy.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1"
+  }
+}

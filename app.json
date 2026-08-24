@@ -1,17 +1,25 @@
 {
   "expo": {
-    "name": "goalscan",
+    "name": "GoalScan",
     "slug": "goalscan",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "scheme": "goalscan",
+    "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tharunitprog.goalscan",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.tharunitprog.goalscan",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FAF8F5",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -25,7 +33,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "GoalScan uses the camera to scan product barcodes."
+          "cameraPermission": "GoalScan uses the camera to scan product barcodes and to photograph nutrition labels when a product isn't in the database."
         }
       ],
       "expo-font"
