@@ -33,11 +33,17 @@ interface Props {
   outcome: ScanOutcome;
   profile: Profile;
   onScanAnother: () => void;
+  onPhotographLabel: (barcode: string) => void;
 }
 
-export default function ResultScreen({ outcome, profile, onScanAnother }: Props) {
+export default function ResultScreen({ outcome, profile, onScanAnother, onPhotographLabel }: Props) {
   if (outcome.kind === 'not_found') {
-    return <NotFoundScreen onScanAnother={onScanAnother} />;
+    return (
+      <NotFoundScreen
+        onScanAnother={onScanAnother}
+        onPhotographLabel={() => onPhotographLabel(outcome.barcode)}
+      />
+    );
   }
   if (outcome.kind === 'error') {
     return <ErrorScreen message={outcome.message} onRetry={onScanAnother} />;

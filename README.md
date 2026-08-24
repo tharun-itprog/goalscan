@@ -62,7 +62,7 @@ Expo / React Native (TypeScript). Open Food Facts for product data. No backend �
 | Tier | Method | Speed | Cost | Coverage |
 |---|---|---|---|---|
 | 1 | Barcode → Open Food Facts | instant | free | 81–96% (US/UK/EU) |
-| 2 | Photograph the label → vision transcription | ~2s | ~$0.004–0.018 | anything with a printed panel |
+| 2 | Photograph the label → vision transcription | ~2s | ~$0.004 | anything with a printed panel |
 | 3 | Manual entry | — | free | last resort |
 
 Tier 2 matters more than the miss rate suggests. **A barcode number contains no information about the product** — it's an arbitrary registry key, so a model asked to identify one will invent a fluent, plausible, entirely fabricated nutrition panel. The fallback therefore reads *pixels of an actual label*, never the digits. And because it doesn't depend on the database at all, it works identically in markets where Open Food Facts coverage is thin.
@@ -107,11 +107,17 @@ npx tsc --noEmit                     # typecheck
 
 The first two need no network and no API key.
 
+## Design
+
+One theme, arrived at by rendering the same layout three ways and comparing. Light won on readability rather than taste: the result screen's hero is a *sentence*, and prose favours dark-on-light far more than numerals do — in supermarket lighting, and for the sizeable minority who get halation reading light text on dark.
+
+Contrast is a test (`scripts/verify-contrast.ts`), not a judgement call. It has caught nine WCAG failures across two palettes, none of which were visible by eye. Semantic colours carry a value per ground, because a colour tuned to clear 4.5:1 on off-white measures 2.6:1 on the near-black scanner.
+
 ## Status
 
-Built and tested: scoring engine, profile targets, goal-fit verdicts, Open Food Facts client, app UI, label-scan extraction and normalization.
+Built and tested: scoring engine with headline reasons, profile targets, goal-fit verdicts, Open Food Facts client, the full label-scan path from camera to score, and the app UI.
 
-Not yet built: label scanning is not wired into the scanner screen, so tier 2 isn't reachable from the UI yet. Swap suggestions ("here's a better option") are designed but unbuilt.
+Not yet built: swap suggestions ("here's a better option"), and manual entry as a third fallback.
 
 ## Attribution and licensing
 

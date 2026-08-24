@@ -1,10 +1,11 @@
 /**
  * The camera screen: point at a barcode, get a ScanOutcome, hand it up.
  *
- * Scoring happens here rather than in App.tsx because this is the only screen
- * that has both a freshly-looked-up Product and the Profile needed to derive
- * targets — computing it one level up would mean threading the same two
- * things through App.tsx for no benefit.
+ * Scoring (targets -> health -> goal fit) lives in scan/evaluate.ts, not
+ * here — this screen and LabelCaptureScreen both produce a fresh Product and
+ * need the same chain run on it, and the two are called from different
+ * places at different times, so the chain has to live somewhere they can
+ * both reach rather than inline in either one.
  *
  * This is the app's one dark screen — a viewfinder wants a dark frame — so it
  * draws exclusively from `colors.dark.*`. See theme.ts for why the light-
@@ -23,22 +24,27 @@ import {
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import SecondaryButton from '../components/SecondaryButton';
 import { isScorable, lookupBarcode } from '../api/openfoodfacts';
-import { computeTargets } from '../profile/targets';
-import { computeHealthScore } from '../scoring/health';
-import { computeGoalFit } from '../scoring/goalfit';
+import { evaluateProduct } from '../scan/evaluate';
 import { colors, radii, spacing, type } from '../theme';
-import type { GoalFit, HealthScore, Product, Profile } from '../types';
+import type { Profile, ScanResult } from '../types';
 
 export type ScanOutcome =
-  | { kind: 'success'; product: Product; health: HealthScore; goalFit: GoalFit }
-  /** Covers both a genuine OFF miss and a hit too sparse to score honestly. */
-  | { kind: 'not_found' }
+  | ({ kind: 'success' } & ScanResult)
+  /**
+   * Covers both a genuine OFF miss and a hit too sparse to score honestly.
+   * `barcode` rides along so the "photograph the label" fallback reachable
+   * from this dead end can still tag the eventual scan with the code that
+   * missed, instead of scanning blind the way the no-barcode-in-hand
+   * fallback on this screen has to.
+   */
+  | { kind: 'not_found'; barcode: string }
   | { kind: 'error'; message: string };
 
 interface Props {
   profile: Profile;
   onScanned: (outcome: ScanOutcome) => void;
   onEditProfile: () => void;
+  onPhotographLabel: (barcode: string) => void;
 }
 
 // expo-camera's BarcodeType union spells these with underscores
@@ -46,13 +52,9 @@ interface Props {
 // keeps this compiling instead of only looking right.
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e'] as const;
 
-export default function ScannerScreen({ profile, onScanned, onEditProfile }: Props) {
+export default function ScannerScreen({ profile, onScanned, onEditProfile, onPhotographLabel }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [loading, setLoading] = useState(false);
-  // Toggled by the "no barcode" fallback button below — the label-scan flow
-  // isn't wired up yet, so this just tells the user it's coming rather than
-  // pretending to do something.
-  const [showComingSoon, setShowComingSoon] = useState(false);
   // Guards against onBarcodeScanned firing repeatedly for the same code while
   // a lookup is in flight — CameraView keeps scanning every frame until the
   // component unmounts or is told otherwise.
@@ -68,7 +70,7 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile }: Pro
         const lookup = await lookupBarcode(result.data);
 
         if (lookup.status === 'not_found') {
-          onScanned({ kind: 'not_found' });
+          onScanned({ kind: 'not_found', barcode: result.data });
           return;
         }
         if (lookup.status === 'error') {
@@ -78,14 +80,11 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile }: Pro
 
         // Found but too sparse to score honestly — same dead end as a miss.
         if (!isScorable(lookup.product.nutriments)) {
-          onScanned({ kind: 'not_found' });
+          onScanned({ kind: 'not_found', barcode: result.data });
           return;
         }
 
-        const targets = computeTargets(profile);
-        const health = computeHealthScore(lookup.product);
-        const goalFit = computeGoalFit(lookup.product, targets, profile.goal);
-        onScanned({ kind: 'success', product: lookup.product, health, goalFit });
+        onScanned({ kind: 'success', ...evaluateProduct(lookup.product, profile) });
       } catch {
         onScanned({ kind: 'error', message: 'Something went wrong reading that scan.' });
       } finally {
@@ -171,9 +170,13 @@ export default function ScannerScreen({ profile, onScanned, onEditProfile }: Pro
               <SecondaryButton
                 label="No barcode? Photograph the label"
                 tone="dark"
-                onPress={() => setShowComingSoon(true)}
+                // No barcode was ever scanned here, so there's nothing to tag
+                // the eventual label scan with — an empty string, not a
+                // sentinel, since barcode is a plain string everywhere
+                // downstream (Product.barcode included) and every consumer
+                // already has to tolerate "we don't know" some other way.
+                onPress={() => onPhotographLabel('')}
               />
-              {showComingSoon && <Text style={styles.comingSoon}>Label scanning is coming soon.</Text>}
             </View>
           )}
         </View>
@@ -237,7 +240,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   loadingText: { ...type.body, color: colors.dark.text },
-  comingSoon: { ...type.small, color: colors.dark.muted },
   permissionWrap: {
     flex: 1,
     justifyContent: 'center',

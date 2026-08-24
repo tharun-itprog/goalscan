@@ -22,11 +22,15 @@ import Anthropic from '@anthropic-ai/sdk';
 const PORT = process.env.PORT ?? 8787;
 
 /**
- * Swap to "claude-haiku-4-5" to cut per-scan cost roughly 5x ($1/$5 per MTok
- * vs $5/$25). Transcription is mechanical, so Haiku is a reasonable fit — but
- * that is a quality/cost call, so it's yours to make rather than mine.
+ * Haiku 4.5 — chosen for cost. Transcribing a printed panel is mechanical
+ * work, so the cheapest capable model is the right one: roughly $0.004 per
+ * scan against $0.018 on Opus 5, at $1/$5 per MTok vs $5/$25.
+ *
+ * If accuracy on awkward labels (glare, curved packaging, tiny print) turns
+ * out to be the bottleneck, move back up — the schema and prompt are
+ * model-independent, so it is a one-line change either way.
  */
-const MODEL = 'claude-opus-5';
+const MODEL = 'claude-haiku-4-5';
 
 /** Max decoded image bytes. Anthropic caps request size; reject early. */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -121,12 +125,10 @@ async function extract(imageBase64, mediaType) {
     model: MODEL,
     max_tokens: 4096,
     system: SYSTEM,
-    // Transcription is mechanical — low effort keeps latency and cost down
-    // without touching accuracy on a task this bounded.
-    output_config: {
-      effort: 'low',
-      format: { type: 'json_schema', schema: SCHEMA },
-    },
+    // NOTE: no `effort` here. It is valid on Opus/Sonnet 5-tier models but is
+    // REJECTED by Haiku 4.5, so sending it would 400 every request. Haiku also
+    // does no thinking unless asked, which is what we want for transcription.
+    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
     messages: [
       {
         role: 'user',

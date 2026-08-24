@@ -5,8 +5,8 @@
  *
  * Leads with the fallback rather than apologising: photographing the label
  * is the feature this state exists to advertise, not a consolation prize for
- * a failure. The label-scan flow itself isn't wired up yet (see
- * api/labelScan.ts), so both actions here are inert rather than faking a scan.
+ * a failure. Manual entry is genuinely not built, so that action alone stays
+ * inert.
  */
 
 import { useState } from 'react';
@@ -23,10 +23,11 @@ const ICON_SIZE = type.score.fontSize;
 
 interface Props {
   onScanAnother: () => void;
+  onPhotographLabel: () => void;
 }
 
-export default function NotFoundScreen({ onScanAnother }: Props) {
-  const [comingSoon, setComingSoon] = useState<'photo' | 'manual' | null>(null);
+export default function NotFoundScreen({ onScanAnother, onPhotographLabel }: Props) {
+  const [manualComingSoon, setManualComingSoon] = useState(false);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -40,9 +41,11 @@ export default function NotFoundScreen({ onScanAnother }: Props) {
         </Text>
 
         <View style={styles.actions}>
-          <PrimaryButton label="Photograph the label" onPress={() => setComingSoon('photo')} />
-          <SecondaryButton label="Enter it by hand" onPress={() => setComingSoon('manual')} />
-          {comingSoon && <Text style={styles.comingSoon}>That's coming soon — not built yet.</Text>}
+          <PrimaryButton label="Photograph the label" onPress={onPhotographLabel} />
+          <SecondaryButton label="Enter it by hand" onPress={() => setManualComingSoon(true)} />
+          {manualComingSoon && (
+            <Text style={styles.comingSoon}>Manual entry is coming soon — not built yet.</Text>
+          )}
         </View>
 
         <Pressable onPress={onScanAnother} hitSlop={8} style={styles.scanAnother}>
