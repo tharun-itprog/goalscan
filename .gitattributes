@@ -1,0 +1,10 @@
+# GitHub labelled this repo "HTML" because the design canvas is 2.3 MB of
+# precompiled editor payload -- 92% of the bytes and none of the work. It's a
+# React Native app in TypeScript, and the language badge is the first thing a
+# reader sees, so linguist is told what these files actually are.
+
+# The published canvas: a build artifact, not source. Collapsed in diffs too.
+design-canvas/goalscan-screen-flow.html linguist-generated=true
+
+# The artboards are hand-authored, but they're design documentation, not app code.
+design-canvas/*.dc.html linguist-documentation
