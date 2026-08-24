@@ -1,0 +1,20 @@
+GoalScan
+Copyright 2026 tharun-itprog
+
+This product includes software developed by tharun-itprog.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+---
+
+Product data is retrieved at runtime from Open Food Facts
+(https://world.openfoodfacts.org) and is licensed separately under the
+Open Database License (ODbL) v1.0:
+https://opendatacommons.org/licenses/odbl/1-0/
+
+The ODbL applies to that data, not to this source code. Any deployment of
+this app must keep the Open Food Facts attribution visible in the UI.
+
+---
+
+Nutrition reference values are general-population figures. This software is
+not medical advice and must not be presented as such.

@@ -148,6 +148,10 @@ See [DEPLOY.md](DEPLOY.md). The short version: the proxy has to be hosted before
 
 ## Attribution and licensing
 
-Product data comes from [Open Food Facts](https://world.openfoodfacts.org), used under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/1-0/). The database is free to use commercially with attribution; ODbL's share-alike clause applies to redistributing a modified copy of the *database*, not to an application that queries it.
+This source is [Apache 2.0](LICENSE). Fork it, build on it, ship it commercially — keep the notice and state your changes.
+
+Product data comes from [Open Food Facts](https://world.openfoodfacts.org), used under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/1-0/). That licence covers the *data*, not this code. The database is free to use commercially with attribution; ODbL's share-alike clause applies to redistributing a modified copy of the database, not to an application that queries it. **If you deploy this, keep the Open Food Facts credit visible in the UI** — it's on the result screen.
+
+You'll need your own Anthropic API key for the label-scan tier; see [DEPLOY.md](DEPLOY.md). The barcode tier needs no key and no account.
 
 Not medical advice, and deliberately not written to sound like it. Nutrient reference values are general-population figures.

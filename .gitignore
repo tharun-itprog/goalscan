@@ -30,8 +30,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files -- .env included, not just .env*.local, since a plain
+# .env holding ANTHROPIC_API_KEY is the obvious thing to create and the
+# expensive thing to commit
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
